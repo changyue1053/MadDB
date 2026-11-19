@@ -1,8 +1,9 @@
 # iOS ARM64 binary preview (0.1.0-preview.1)
 
 This is a source recipe for a standalone **MadDB.xcframework**, not a published or
-signed release. It contains a Swift API and its statically linked SQLite/Rust core
-inside each dynamic framework. No producer source is needed by consumers. The
+signed release. An official Xcode framework target archives the Swift API and its statically linked SQLite/Rust core
+inside each dynamic framework. Xcode generates/processes Info.plist, module interfaces
+and the flat iOS resource layout; no script synthesizes or rewrites bundle metadata. No producer source is needed by consumers. The
 only supported slices are iOS arm64 and Apple-silicon iOS Simulator arm64, minimum
 iOS 15. Intel simulators, macOS/Catalyst, other platforms and Swift concurrency
 conformance are not included. No MadObs dependency or encryption is enabled.
@@ -67,26 +68,29 @@ No artifacts/logs are uploaded and there is no release/provisioning workflow.
 
 ## Evidence gates, kept separate
 
-[First hosted run 44454337583](https://github.com/changyue1053/MadDB/actions/runs/44454337583)
-on `5c7873269e9a3845a88dab5466121f624bf62a4c` built/inspected both framework
-slices and compiled the unsigned device consumer. The ARM64 simulator booted and
-consumer built, but installation rejected the embedded framework Info.plist before
-XCTest execution. **No simulator test passed in that run.**
+The first hosted [run 44454337583](https://github.com/changyue1053/MadDB/actions/runs/44454337583)
+and metadata-correction [run 44455869624](https://github.com/changyue1053/MadDB/actions/runs/44455869624)
+built/inspected both framework slices and compiled the unsigned device consumer.
+The ARM64 simulator booted and consumer built, but installation rejected the
+embedded framework Info.plist before XCTest execution. Adding individual keys
+in the second run did not solve installation. **Neither run executed XCTest.**
 
-This follow-up adds standard framework dictionary/version and SDK/platform build
-metadata, with matching package-inspector checks. SDK build identity is queried
-from the selected installed SDK; Xcode/SDK versions remain pinned and preflighted.
-This is a targeted packaging correction, not a proven runtime fix until a new
-hosted run installs the app and actually executes XCTest. The harness is unchanged.
+This follow-up replaces hand-assembled Swift framework bundles with an official
+Xcode dynamic-framework target and `archive` for generic iOS/iOS Simulator,
+`BUILD_LIBRARY_FOR_DISTRIBUTION=YES`, `SKIP_INSTALL=NO`, and generated Info.plist.
+The Rust archive remains hidden-linked into the framework. Xcode copies notices
+through its resource phase; packaged archives are not mutated afterward. Only
+allowlisted public identity fields are printed for diagnostics. The existing
+independent app/test project and actual ARM64 simulator harness are unchanged.
 
-- Local Linux: seven synthetic format/metadata tests plus shell/Python validation.
-  These tests do not execute Apple tools or simulate an iOS installation.
-- Pending rerun: corrected package builds, unsigned consumer build, simulator
-  installation and actual ARM64 XCTest against the binary consumer.
+- Local Linux: synthetic inspector regressions, shell/Python/project structural
+  checks only. No Apple build/archive or installation has executed locally.
+- Pending hosted rerun: actual Xcode archives, package inspection, unsigned device
+  consumer build, simulator installation and real XCTest against the final binary.
+  This change is a build recipe correction, not evidence of successful installation.
 - Physical iPhone/iPad execution, signing/distribution, minimum-iOS runtime,
-  performance and system data-protection behavior remain untested.
-- Android build checks remain separate and unchanged. Android ARM64 4 KiB and
-  16 KiB runtime gates are still pending; an iOS simulator proves neither.
+  performance and data-protection behavior remain untested.
+- Android build and ARM64 4 KiB/16 KiB runtime gates remain separate.
 
 ## Primary references
 

@@ -83,14 +83,21 @@ def inspect(root):
         framework = root / lib['LibraryIdentifier'] / lib['LibraryPath']
         if framework.name != 'MadDB.framework':
             raise ValueError('wrong framework name')
-        inspect_framework_plist(plistlib.loads((framework / 'Info.plist').read_bytes()), variant)
+        metadata = plistlib.loads((framework / 'Info.plist').read_bytes())
+        inspect_framework_plist(metadata, variant)
+        # Print only public package/platform identity, never the complete generated plist.
+        keys = ('CFBundleIdentifier', 'CFBundlePackageType', 'CFBundleInfoDictionaryVersion',
+                'CFBundleSupportedPlatforms', 'DTPlatformName', 'DTSDKName', 'DTSDKBuild')
+        print('Framework identity:', {key: metadata.get(key) for key in keys})
+        if (framework / 'Resources').exists():
+            raise ValueError('unexpected non-flat iOS framework Resources layout')
         inspect_macho((framework / 'MadDB').read_bytes(), 7 if variant else 2)
         module = 'arm64-apple-ios' + ('-simulator' if variant else '')
         interface = (framework / 'Modules/MadDB.swiftmodule' / (module + '.swiftinterface')).read_text()
         if 'CMadDB' in interface:
             raise ValueError('private C module leaked into public Swift interface')
         for required in ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'DEPENDENCIES.md', 'third-party/provenance.json']:
-            if not (framework / 'Resources/Notices' / required).is_file():
+            if not (framework / 'Notices' / required).is_file():
                 raise ValueError(f'missing notice: {required}')
         # Hidden static archive symbols must not become the framework ABI.
         symbols = subprocess.check_output(['xcrun', 'nm', '-gjU', str(framework / 'MadDB')], text=True)

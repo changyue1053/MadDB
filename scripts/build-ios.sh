@@ -14,11 +14,15 @@ out="$PWD/build/ios"
 mkdir -p "$out/cmodule"
 cp include/maddb.h "$out/cmodule/"
 printf 'module CMadDB { header "maddb.h" export * }\n' > "$out/cmodule/module.modulemap"
+# Resources are inputs to Xcode's Copy Bundle Resources phase, not post-archive edits.
+mkdir -p "$out/Notices"
+cp LICENSE THIRD_PARTY_NOTICES.md DEPENDENCIES.md "$out/Notices/"
+cp -R third-party "$out/Notices/"
 for variant in device simulator; do
   if [[ $variant == device ]]; then
-    target=aarch64-apple-ios; sdk=iphoneos; swift_target=arm64-apple-ios15.0; module=arm64-apple-ios
+    target=aarch64-apple-ios; sdk=iphoneos; destination='generic/platform=iOS'
   else
-    target=aarch64-apple-ios-sim; sdk=iphonesimulator; swift_target=arm64-apple-ios15.0-simulator; module=arm64-apple-ios-simulator
+    target=aarch64-apple-ios-sim; sdk=iphonesimulator; destination='generic/platform=iOS Simulator'
   fi
   export SDKROOT
   SDKROOT=$(xcrun --sdk "$sdk" --show-sdk-path)
@@ -26,39 +30,18 @@ for variant in device simulator; do
   # Only this invocation overrides the manifest crate types; Linux/Android unchanged.
   cargo rustc --lib --crate-type staticlib --locked --offline --release \
     --target "$target" --no-default-features --features c-api
-  framework="$out/$variant/MadDB.framework"
-  mkdir -p "$framework/Modules/MadDB.swiftmodule" "$framework/Resources/Notices" "$framework/Headers"
-  xcrun --sdk "$sdk" swiftc ios/Sources/MadDatabase.swift \
-    -target "$swift_target" -sdk "$SDKROOT" -swift-version 5 -O \
-    -module-name MadDB -enable-library-evolution -emit-library -emit-module \
-    -emit-module-path "$framework/Modules/MadDB.swiftmodule/$module.swiftmodule" \
-    -emit-module-interface-path "$framework/Modules/MadDB.swiftmodule/$module.swiftinterface" \
-    -I "$out/cmodule" -lresolv -liconv -Xlinker -rpath -Xlinker /usr/lib/swift \
-    -Xlinker -load_hidden \
-    -Xlinker "$CARGO_TARGET_DIR/$target/release/libmaddb.a" \
-    -Xlinker -install_name -Xlinker '@rpath/MadDB.framework/MadDB' \
-    -o "$framework/MadDB"
-  cp include/maddb.h "$framework/Headers/"
-  cp LICENSE THIRD_PARTY_NOTICES.md DEPENDENCIES.md "$framework/Resources/Notices/"
-  cp -R third-party "$framework/Resources/Notices/"
-  python3 - "$framework" "$sdk" "$(xcrun --sdk "$sdk" --show-sdk-build-version)" <<'PY'
-import plistlib, sys
-from pathlib import Path
-root, sdk, sdk_build = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-assert sdk in ('iphoneos', 'iphonesimulator') and sdk_build
-plist = dict(CFBundleIdentifier='io.maddb.sdk', CFBundleName='MadDB',
-             CFBundleExecutable='MadDB', CFBundlePackageType='FMWK',
-             CFBundleInfoDictionaryVersion='6.0', CFBundleDevelopmentRegion='en',
-             DTPlatformName=sdk, DTPlatformVersion='26.2',
-             DTSDKName=sdk + '26.2', DTSDKBuild=sdk_build,
-             DTXcode='2620', DTXcodeBuild='17C52',
-             CFBundleShortVersionString='0.1.0', CFBundleVersion='1',
-             MadDBPackageVersion='0.1.0-preview.1', MadDBCABIVersion=1,
-             MinimumOSVersion='15.0', CFBundleSupportedPlatforms=[
-                 'iPhoneOS' if sdk == 'iphoneos' else 'iPhoneSimulator'])
-(root / 'Info.plist').write_bytes(plistlib.dumps(plist))
-PY
+  archive="$out/$variant.xcarchive"
+  [[ ! -e "$archive" ]] || { echo 'Use a fresh archive output directory' >&2; exit 1; }
+  # Xcode owns framework linking, generated/processed Info.plist, module interfaces,
+  # standard iOS bundle layout and resource copying. Never rewrite its archive.
+  env -u SDKROOT xcodebuild archive -project ios/Framework/MadDB.xcodeproj \
+    -scheme MadDB -configuration Release -destination "$destination" \
+    -archivePath "$archive" -derivedDataPath "$out/derived-$variant" \
+    MADDB_RUST_STATIC_LIBRARY="$CARGO_TARGET_DIR/$target/release/libmaddb.a" \
+    ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO
 done
-xcodebuild -create-xcframework -framework "$out/device/MadDB.framework" \
-  -framework "$out/simulator/MadDB.framework" -output "$out/MadDB.xcframework"
+xcodebuild -create-xcframework \
+  -archive "$out/device.xcarchive" -framework MadDB.framework \
+  -archive "$out/simulator.xcarchive" -framework MadDB.framework \
+  -output "$out/MadDB.xcframework"
 python3 scripts/inspect-ios-package.py "$out/MadDB.xcframework"
