@@ -26,3 +26,12 @@ WAL is temporary and deleted after execution. No artifacts/dependencies publishe
 Locally only C++ syntax and runner/workflow static checks can run; Cargo and CMake
 are absent. Hosted real execution is pending. Existing callback-only real SQLite
 and mock contract gates remain separate. No upstream source changes or relicensing.
+
+The imported MadDB `.so` has no assumed SONAME. The consumer declares
+`IMPORTED_NO_SONAME TRUE` so CMake uses library search/link form instead of
+encoding an absolute producer filename as DT_NEEDED, with the staged library
+folder in BUILD_RPATH. The dependency check still requires exactly one
+`libmaddb.so =>` resolution at the expected absolute staging path; direct-path,
+missing, duplicate, different, unresolved and forbidden dependencies fail with
+separate fixed labels. Both inspection and execution clear LD_LIBRARY_PATH,
+LD_PRELOAD and LD_AUDIT. This is not permission for an ambient library fallback.

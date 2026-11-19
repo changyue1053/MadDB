@@ -10,8 +10,10 @@ if(NOT TARGET MadObs::runtime)
 endif()
 add_library(maddb_installed SHARED IMPORTED)
 set_target_properties(maddb_installed PROPERTIES IMPORTED_LOCATION "${MADDB_PREFIX}/lib/libmaddb.so"
+  IMPORTED_NO_SONAME TRUE
   INTERFACE_INCLUDE_DIRECTORIES "${MADDB_PREFIX}/include")
 add_executable(consumer main.cpp)
+set_target_properties(consumer PROPERTIES BUILD_RPATH "${MADDB_PREFIX}/lib")
 target_compile_features(consumer PRIVATE cxx_std_17)
 target_compile_options(consumer PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic -Werror)
 target_link_libraries(consumer PRIVATE maddb_installed MadObs::runtime)

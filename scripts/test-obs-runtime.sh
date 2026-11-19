@@ -54,11 +54,10 @@ cmake -S adapters/obs/runtime -B "$out/consumer-build" -DMADDB_WITH_MADOBS_RUNTI
   -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF
 cmake --build "$out/consumer-build" --parallel 2
 stage=runtime-no-network-provider-dependencies
-ldd "$out/consumer-build/consumer" >"$out/dependencies.txt"
 # Explicit checker fails on forbidden/missing dependencies; negated grep alone
 # is exempt from shell errexit and must not be used as a gate.
-python3 scripts/check-obs-runtime-dependencies.py "$out/dependencies.txt" "$out/maddb/lib/libmaddb.so"
+python3 scripts/check-obs-runtime-dependencies.py "$out/consumer-build/consumer" "$out/maddb/lib/libmaddb.so" >&3 2>&3
 stage=runtime-local-admission-drain
 mkdir -m 700 "$scratch/wal"
-timeout 30 "$out/consumer-build/consumer" "$scratch/wal"
+env -u LD_LIBRARY_PATH -u LD_PRELOAD -u LD_AUDIT timeout 30 "$out/consumer-build/consumer" "$scratch/wal"
 printf 'PASS: real SQLite to installed static MadObs admission/drain and bounded local batch check\n' >&3
