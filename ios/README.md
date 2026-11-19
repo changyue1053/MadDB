@@ -67,14 +67,22 @@ No artifacts/logs are uploaded and there is no release/provisioning workflow.
 
 ## Evidence gates, kept separate
 
-- Local Linux: Python synthetic Mach-O inspector regressions and shell/project
-  static validation only. No Swift or Rust compilation has run locally.
-- Pending hosted CI: both real arm64 binaries, correct Mach-O platform and install
-  name, Swift interfaces, notices, no exported internal SQLite/C symbols, and
-  unsigned device consumer compilation.
-- Pending hosted CI: actual iOS **Simulator** app/XCTest run on ARM64, including
-  persistence and Swift/C ABI error behavior. A green packaging step alone is not
-  runtime proof.
+[First hosted run 44454337583](https://github.com/changyue1053/MadDB/actions/runs/44454337583)
+on `5c7873269e9a3845a88dab5466121f624bf62a4c` built/inspected both framework
+slices and compiled the unsigned device consumer. The ARM64 simulator booted and
+consumer built, but installation rejected the embedded framework Info.plist before
+XCTest execution. **No simulator test passed in that run.**
+
+This follow-up adds standard framework dictionary/version and SDK/platform build
+metadata, with matching package-inspector checks. SDK build identity is queried
+from the selected installed SDK; Xcode/SDK versions remain pinned and preflighted.
+This is a targeted packaging correction, not a proven runtime fix until a new
+hosted run installs the app and actually executes XCTest. The harness is unchanged.
+
+- Local Linux: seven synthetic format/metadata tests plus shell/Python validation.
+  These tests do not execute Apple tools or simulate an iOS installation.
+- Pending rerun: corrected package builds, unsigned consumer build, simulator
+  installation and actual ARM64 XCTest against the binary consumer.
 - Physical iPhone/iPad execution, signing/distribution, minimum-iOS runtime,
   performance and system data-protection behavior remain untested.
 - Android build checks remain separate and unchanged. Android ARM64 4 KiB and
@@ -87,3 +95,5 @@ No artifacts/logs are uploaded and there is no release/provisioning workflow.
 - [Cargo per-invocation crate-type override](https://doc.rust-lang.org/cargo/commands/cargo-rustc.html)
 - [Official macOS 15 ARM64 runner image](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md)
 - [GitHub-hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+- [Apple framework Info.plist example (JavaScriptCore)](https://github.com/WebKit/WebKit/blob/main/Source/JavaScriptCore/Info.plist)
+- [Apple CFBundleInfoDictionaryVersion](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleinfodictionaryversion)

@@ -36,5 +36,31 @@ class InspectionTests(unittest.TestCase):
             module.inspect_macho(fixture()[:-1], 2)
 
 
+class FrameworkMetadataTests(unittest.TestCase):
+    def fixture(self, variant=''):
+        sdk = 'iphonesimulator' if variant else 'iphoneos'
+        return dict(CFBundleIdentifier='io.maddb.sdk', CFBundleExecutable='MadDB',
+                    CFBundlePackageType='FMWK', CFBundleInfoDictionaryVersion='6.0',
+                    DTPlatformName=sdk, DTPlatformVersion='26.2',
+                    DTSDKName=sdk + '26.2', DTSDKBuild='synthetic-build',
+                    DTXcode='2620', DTXcodeBuild='17C52', MinimumOSVersion='15.0',
+                    CFBundleSupportedPlatforms=['iPhoneSimulator' if variant else 'iPhoneOS'])
+
+    def test_both_variants(self):
+        for variant in ('', 'simulator'):
+            module.inspect_framework_plist(self.fixture(variant), variant)
+
+    def test_required_metadata_is_not_optional(self):
+        for key in ('CFBundleInfoDictionaryVersion', 'DTPlatformName', 'DTSDKName', 'DTSDKBuild'):
+            info = self.fixture()
+            del info[key]
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                module.inspect_framework_plist(info, '')
+
+    def test_device_metadata_rejected_for_simulator(self):
+        with self.assertRaises(ValueError):
+            module.inspect_framework_plist(self.fixture(), 'simulator')
+
+
 if __name__ == '__main__':
     unittest.main()

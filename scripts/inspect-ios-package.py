@@ -52,6 +52,21 @@ def inspect_macho(data, expected_platform):
         raise ValueError('wrong framework install name')
 
 
+def inspect_framework_plist(info, variant):
+    sdk = 'iphonesimulator' if variant == 'simulator' else 'iphoneos'
+    expected = dict(CFBundleIdentifier='io.maddb.sdk', CFBundleExecutable='MadDB',
+                    CFBundlePackageType='FMWK', CFBundleInfoDictionaryVersion='6.0',
+                    DTPlatformName=sdk, DTPlatformVersion='26.2',
+                    DTSDKName=sdk + '26.2', DTXcode='2620', DTXcodeBuild='17C52',
+                    MinimumOSVersion='15.0', CFBundleSupportedPlatforms=[
+                        'iPhoneSimulator' if variant == 'simulator' else 'iPhoneOS'])
+    for key, value in expected.items():
+        if info.get(key) != value:
+            raise ValueError(f'missing or mismatched framework metadata: {key}')
+    if not isinstance(info.get('DTSDKBuild'), str) or not info['DTSDKBuild']:
+        raise ValueError('missing SDK build provenance')
+
+
 def inspect(root):
     info = plistlib.loads((root / 'Info.plist').read_bytes())
     libraries = info['AvailableLibraries']
@@ -68,6 +83,7 @@ def inspect(root):
         framework = root / lib['LibraryIdentifier'] / lib['LibraryPath']
         if framework.name != 'MadDB.framework':
             raise ValueError('wrong framework name')
+        inspect_framework_plist(plistlib.loads((framework / 'Info.plist').read_bytes()), variant)
         inspect_macho((framework / 'MadDB').read_bytes(), 7 if variant else 2)
         module = 'arm64-apple-ios' + ('-simulator' if variant else '')
         interface = (framework / 'Modules/MadDB.swiftmodule' / (module + '.swiftinterface')).read_text()

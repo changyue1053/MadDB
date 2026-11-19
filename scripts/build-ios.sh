@@ -41,12 +41,17 @@ for variant in device simulator; do
   cp include/maddb.h "$framework/Headers/"
   cp LICENSE THIRD_PARTY_NOTICES.md DEPENDENCIES.md "$framework/Resources/Notices/"
   cp -R third-party "$framework/Resources/Notices/"
-  python3 - "$framework" "$sdk" <<'PY'
+  python3 - "$framework" "$sdk" "$(xcrun --sdk "$sdk" --show-sdk-build-version)" <<'PY'
 import plistlib, sys
 from pathlib import Path
-root, sdk = Path(sys.argv[1]), sys.argv[2]
+root, sdk, sdk_build = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+assert sdk in ('iphoneos', 'iphonesimulator') and sdk_build
 plist = dict(CFBundleIdentifier='io.maddb.sdk', CFBundleName='MadDB',
              CFBundleExecutable='MadDB', CFBundlePackageType='FMWK',
+             CFBundleInfoDictionaryVersion='6.0', CFBundleDevelopmentRegion='en',
+             DTPlatformName=sdk, DTPlatformVersion='26.2',
+             DTSDKName=sdk + '26.2', DTSDKBuild=sdk_build,
+             DTXcode='2620', DTXcodeBuild='17C52',
              CFBundleShortVersionString='0.1.0', CFBundleVersion='1',
              MadDBPackageVersion='0.1.0-preview.1', MadDBCABIVersion=1,
              MinimumOSVersion='15.0', CFBundleSupportedPlatforms=[

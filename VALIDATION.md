@@ -34,7 +34,7 @@ requirement but has not been tested as a minimum supported compiler here.
 ## Not verified
 
 Formatting/lint checks could not run because rustfmt and clippy were unavailable
-in the original toolchain. No current advisory audit, cross-platform build,
+in the original toolchain. No current advisory audit, physical-device validation,
 crash/power-loss exercise, hostile database test, cross-process concurrency stress,
 or performance benchmark has been completed. There is no encryption implementation
 or encryption validation claim. Passing local tests is not a production-readiness
@@ -71,7 +71,7 @@ Rust toolchain is available: new Rust tests, shared-library build, linkage and
 host execution have NOT run. Earlier green CI covers only the prior source, not
 this ABI candidate. The declared minimum Rust/compiler/platform claims are unchanged.
 
-## Android-native candidate
+## Android-native build/packaging verified; runtime pending
 
 The Android slice preserves Rust source, C ABI/header, Cargo manifest and lock.
 Local checks: shell/YAML/XML parsing; JNI C warning-as-error syntax check using the
@@ -82,6 +82,22 @@ compatibility remains a real Gradle/SDK build gate. Generated JNI descriptors ma
 the C registration signatures. No fake native library or Android runtime was used.
 
 No Rust Android compiler, NDK, Gradle, SDK, adb or device was installed locally.
-Android compilation/linking, AAR/APK inspection, instrumentation execution and 16 KiB
-runtime tests have not run. Hosted build-only workflow is prepared but not published
-or executed as part of this source change. See android/README.md for exact gates.
+Hosted Android build-only runs
+[44452680122](https://github.com/changyue1053/MadDB/actions/runs/44452680122)
+(`bb01de26c60e0ac8efab830f1f7dd663cbf623ae`) and
+[44454337609](https://github.com/changyue1053/MadDB/actions/runs/44454337609)
+(`5c7873269e9a3845a88dab5466121f624bf62a4c`) completed successfully.
+They compiled the ARM64 Rust/JNI AAR, independent app and instrumentation APK;
+checked both native ELF LOAD alignments, final APK uncompressed native entries,
+and Build Tools 35 `zipalign -c -P 16 -v 4`. This is build/ELF/ZIP evidence, not
+Android execution, RELRO validation or a 16 KiB runtime result.
+
+No artifacts were uploaded or downloaded. A future authorized runtime test must
+pin the full audited runtime-test source SHA and rebuild app plus instrumentation
+APK from that exact checkout with the pinned tools, rather than downloading these
+CI artifacts or mixing revisions. The strengthened device script checks the
+configured serial only: ARM64 kernel, primary arm64-v8a ABI and explicit 4096 or
+16384 page-size mode before installation. Nine synthetic command-shape regressions
+pass locally with a fake adb responder; no real adb or Android runtime is involved.
+Actual ARM64 4 KiB and 16 KiB instrumentation remain pending independently.
+See android/README.md for gates and installation scope.

@@ -1,7 +1,12 @@
 # Android-native preview: one ABI, one independent consumer
 
-**Status: source candidate, Android build/runtime not yet verified.** This is the
-first Android adapter for the existing C ABI, not a completed Android SDK release.
+**Status: Android cross-build and ELF/ZIP packaging verified; runtime pending.**
+Successful hosted build-only runs:
+[44452680122](https://github.com/changyue1053/MadDB/actions/runs/44452680122)
+on `bb01de26c60e0ac8efab830f1f7dd663cbf623ae`, and
+[44454337609](https://github.com/changyue1053/MadDB/actions/runs/44454337609)
+on `5c7873269e9a3845a88dab5466121f624bf62a4c`.
+This is the first Android adapter for the existing C ABI, not a completed SDK release.
 
 Scope: `arm64-v8a`, minimum API 26, compile/target SDK 35. Java API is directly
 callable from Java or Kotlin; it does not require KMP or Obs. No network permission,
@@ -63,12 +68,14 @@ No Maven deployment, app-store upload, release signing key, or artifact upload e
 2. **Cross-build/packaging**: hosted read-only `Android ARM64 build checks` builds the
    AAR, independent APK and instrumentation APK. It checks exact two-library ARM64
    contents and 16 KiB ELF LOAD alignment in both actual AAR and final APK. The final
-   APK must also pass Build Tools `zipalign -c -P 16 -v 4`. Both Rust cdylib and JNI
+   APK native `lib/` entries must be uncompressed (`ZIP_STORED`) and pass Build Tools `zipalign -c -P 16 -v 4`. Both Rust cdylib and JNI
    link explicitly for 16 KiB; NDK r28c and AGP 8.7.3 are pinned.
-3. **Real ARM64 runtime**: an authorized ARM64 device or ARM64 Android emulator must
+3. **Real ARM64 4 KiB runtime**: an authorized ARM64 device or ARM64 Android emulator must
    load the packaged libraries and pass persistent binary/Unicode/empty/missing,
    remove, error-map and lifecycle tests. An x86 emulator or host JNI test cannot
-   substitute. No emulator/device is used by the build-only workflow.
+   substitute. The target must report kernel `aarch64`/`arm64`, primary ABI
+   `arm64-v8a`, and page size `4096`. Merely listing ARM in `abilist` is insufficient.
+   No emulator/device is used by the build-only workflow.
 4. **16 KiB runtime**: confirm `adb shell getconf PAGE_SIZE` is 16384 and rerun the
    same persistent tests. ELF/ZIP alignment alone is not runtime proof.
 
@@ -76,13 +83,24 @@ The following explicitly installs/replaces **only the test app and its test APK*
 an already authorized target; run it only when installation is intended:
 
 ```
-ANDROID_SERIAL=<authorized-arm64-target> bash scripts/test-android-device.sh
-REQUIRE_16K=1 ANDROID_SERIAL=<authorized-16k-arm64-target> bash scripts/test-android-device.sh
+EXPECTED_PAGE_SIZE=4096 ANDROID_SERIAL=<authorized-arm64-target> bash scripts/test-android-device.sh
+EXPECTED_PAGE_SIZE=16384 ANDROID_SERIAL=<authorized-16k-arm64-target> bash scripts/test-android-device.sh
 ```
 
-No device was attached or modified during source preparation. ARM64 build, APK
-alignment and Android runtime/16 KiB runtime are pending. Existing green Linux C ABI
-checks validate only the host implementation, not Android JNI, Bionic, or packaging.
+No device was discovered, attached or modified during source preparation. The
+architecture/page-size regression uses a synthetic adb command responder only;
+it is **not** Android or instrumentation execution. Both actual 4 KiB and 16 KiB
+ARM64 runtime gates remain pending. Properties are a compatibility check on an
+authorized trusted target, not hardware attestation against a malicious device.
+
+There are **no downloadable CI APK/AAR artifacts**: these workflows never upload
+them. Before a separately authorized runtime test, pin and record the full audited
+runtime-test commit SHA, check out that exact source, and rebuild both the app and
+instrumentation APK together using the pinned tools above. Do not use a moving
+branch, claim APKs were downloaded from these runs, or mix APKs from different
+commits. The test script installs the locally rebuilt pair only; selecting a serial
+is not itself authorization to install. The old `REQUIRE_16K` flag is rejected in
+favor of the explicit `EXPECTED_PAGE_SIZE` modes.
 
 Primary references:
 - https://developer.android.com/ndk/guides/other_build_systems
