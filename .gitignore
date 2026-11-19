@@ -1,0 +1,6 @@
+/target/
+/.cargo-home/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
