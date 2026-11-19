@@ -1,0 +1,60 @@
+name: Android packaged symbol evidence
+on:
+  push:
+    branches: [checkpoint/maddb-android-symbol-evidence]
+permissions:
+  contents: read
+concurrency:
+  group: android-arm64-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    name: ARM64 packaged dynamic boundary (build only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      RUSTUP_TOOLCHAIN: 1.100.0
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+      - name: Verify exact source checkpoint
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Use runner JDK 17
+        run: |
+          test -x "$JAVA_HOME_17_X64/bin/javac"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
+      - name: Install explicit Android packages using existing runner licenses
+        run: |
+          # Never accept new license agreements automatically. Missing licenses fail.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358' < /dev/null
+          test -f "$ANDROID_HOME/platforms/android-35/android.jar"
+          test -x "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
+      - name: Prepare pinned Rust and Gradle
+        run: |
+          rustup toolchain install 1.100.0 --profile minimal --no-self-update
+          rustup target add --toolchain 1.100.0 aarch64-linux-android
+          curl --fail --location --retry 2 --output "$RUNNER_TEMP/gradle.zip" https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          echo "d725d707bfabd4dfdc958c624003b3c80accc03f7037b5122c4b1d0ef15cecab  $RUNNER_TEMP/gradle.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+          echo "GRADLE_BIN=$RUNNER_TEMP/gradle-8.9/bin/gradle" >> "$GITHUB_ENV"
+          cargo fetch --locked --target aarch64-linux-android
+      - name: Build AAR and independent APK, inspect ARM64 and 16 KiB alignment
+        run: bash scripts/verify-android-build.sh
+      - name: Audit exact packaged dynamic symbol boundary
+        run: |
+          python3 android-symbol-evidence/audit.py --sdk "$ANDROID_HOME" \
+            --aar android/maddb/build/versioned/maddb-android-0.1.0-preview.1-arm64-v8a.aar \
+            --apk android/smoke-app/build/outputs/apk/debug/smoke-app-debug.apk
+      # No emulator, device, publishing, signing secrets or artifact uploads.
+      # Original debug packaging is unchanged; this is not release signing.
