@@ -136,4 +136,61 @@ final class MadDBSmokeTests: XCTestCase {
             XCTAssertEqual(try Data(contentsOf: file), bytes)
         }
     }
+
+    // Two consumer configurations in ONE installed host app, not two OS sandboxes.
+    func testIndependentApplicationSupportStoresPersistAcrossReopen() throws {
+        XCTAssertEqual(Bundle.main.bundleIdentifier, "org.example.maddb.binarysmoke")
+        let support = try FileManager.default.url(for: .applicationSupportDirectory,
+            in: .userDomainMask, appropriateFor: nil, create: true)
+        let root = support.appendingPathComponent("MadDB-acceptance-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let firstDirectory = root.appendingPathComponent("consumer-a", isDirectory: true)
+        let secondDirectory = root.appendingPathComponent("consumer-b", isDirectory: true)
+        try FileManager.default.createDirectory(at: firstDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: secondDirectory, withIntermediateDirectories: true)
+        let firstURL = firstDirectory.appendingPathComponent("store.sqlite")
+        let secondURL = secondDirectory.appendingPathComponent("store.sqlite")
+        XCTAssertNotEqual(firstURL, secondURL)
+        let firstValue = Data([0, 1, 255, 0])
+        let secondValue = Data([255, 2, 0, 128])
+        // Identical namespace/key ensures this tests file separation, not namespace separation.
+        func withStores(_ body: (MadDatabase, MadDatabase) throws -> Void) throws {
+            let a = try MadDatabase(fileURL: firstURL, namespace: "same.namespace")
+            defer { try? a.close() }
+            let b = try MadDatabase(fileURL: secondURL, namespace: "same.namespace")
+            defer { try? b.close() }
+            try body(a, b)
+            try b.close()
+            try a.close()
+        }
+        try withStores { a, b in
+            XCTAssertNil(try a.get("same-key"))
+            XCTAssertNil(try b.get("same-key"))
+            try a.put("same-key", value: firstValue)
+            XCTAssertNil(try b.get("same-key"))
+            try b.put("same-key", value: secondValue)
+            try a.put("empty", value: Data())
+            XCTAssertNil(try b.get("empty"))
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: firstURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: secondURL.path))
+        // Both original handles are closed before opening independent replacements.
+        try withStores { a, b in
+            XCTAssertEqual(try a.get("same-key"), firstValue)
+            XCTAssertEqual(try b.get("same-key"), secondValue)
+            XCTAssertEqual(try a.get("empty"), Data())
+            XCTAssertNil(try b.get("empty"))
+            try a.remove("same-key")
+            XCTAssertEqual(try b.get("same-key"), secondValue)
+            try b.put("same-key", value: Data([42]))
+            XCTAssertNil(try a.get("same-key"))
+        }
+        try withStores { a, b in
+            XCTAssertNil(try a.get("same-key"))
+            XCTAssertEqual(try a.get("empty"), Data())
+            XCTAssertEqual(try b.get("same-key"), Data([42]))
+            XCTAssertNil(try b.get("empty"))
+        }
+    }
+
 }

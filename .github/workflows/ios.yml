@@ -1,7 +1,7 @@
 name: iOS ARM64 binary and simulator checks
 on:
   push:
-    branches: [main, checkpoint/maddb-source-preview]
+    branches: [main, checkpoint/maddb-source-preview, checkpoint/maddb-ios-store-acceptance]
   pull_request:
     branches: [main, checkpoint/maddb-source-preview]
 permissions:
@@ -38,6 +38,7 @@ jobs:
       - name: Build and inspect standalone XCFramework
         run: |
           python3 scripts/test-ios-package-inspector.py
+          python3 scripts/test-ios-test-results.py
           bash scripts/build-ios.sh
       - name: Build independent device consumer (unsigned, no device execution)
         run: |

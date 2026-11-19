@@ -64,3 +64,26 @@ Generated files and scheme were checked structurally in a Linux environment.
 `xcodebuild`, Apple SDKs, and iOS Simulator are unavailable there, so neither
 command above has been executed here. Compilation and runtime test results must
 be obtained on macOS before declaring this binary consumer validated.
+
+
+## Independent-store acceptance addition (hosted execution pending)
+
+The original suite already tests file close/reopen and namespace separation.
+`testIndependentApplicationSupportStoresPersistAcrossReopen` adds two explicitly
+configured consumer instances under the installed host app's Application Support
+container. Both use the same namespace and keys but distinct SQLite files.
+Three open/close rounds verify persisted distinct binary values, missing versus
+empty, one-store deletion and other-store updates without cross-contamination.
+The test asserts the expected app bundle ID and imports only the packaged SDK.
+
+This is ONE actual app-hosted test process with TWO consumer store configurations,
+not two OS apps, sandbox-security proof or process-relaunch/crash durability.
+No app group, entitlement, account, provisioning identity, real device or endpoint
+is used. Store directories contain only synthetic data and are removed afterward.
+Existing packaging and optional Obs integration remain separate and unchanged.
+
+The simulator runner requires all ten exact named XCTest passes with zero
+failures/skips using xcresult, not just xcodebuild's exit code. Raw simulator
+output stays local; only fixed result labels escape. Local checks cover parser
+regressions and script syntax only; Swift compilation and actual simulator
+acceptance require the next authorized hosted run.
