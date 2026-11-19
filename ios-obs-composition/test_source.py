@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from project import create
 from results import verify
+from verify import simulator_products
 ROOT=Path(__file__).resolve().parents[1]
 class Tests(unittest.TestCase):
     def test_isolated_typed_project(self):
@@ -28,6 +29,38 @@ class Tests(unittest.TestCase):
         self.assertIn('import MadDB',swift)
         self.assertIn('try db.put(',swift)
         self.assertIn('try db.get(',swift)
+    def test_actual_simulator_architecture_gate(self):
+        swift=(ROOT/'ios-obs-composition/Tests.swift').read_text()
+        self.assertIn('#if !targetEnvironment(simulator) || !arch(arm64)',swift)
+        script=(ROOT/'ios-obs-composition/verify.py').read_text()
+        self.assertNotIn("'spawn',uuid,'uname'",script)
+        self.assertIn("'test-without-building'",script)
+        self.assertIn("'MadDBSmokeTests.xctest/MadDBSmokeTests'",script)
+        self.assertLess(script.index("'composition-build-for-testing'"),script.index("'simulator-product-arm64'"))
+        self.assertLess(script.index("'simulator-product-arm64'"),script.index("'composition-test'"))
+        self.assertIn("f'platform=iOS Simulator,id={uuid}'",script)
+        self.assertIn("except (OSError,subprocess.SubprocessError):cleanup_failed=True",script)
+    def test_hosted_product_layouts(self):
+        for embedded in (False, True):
+            with tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);app=root/'MadDBSmoke.app/MadDBSmoke'
+                app.parent.mkdir(parents=True);app.write_bytes(b'app')
+                relative=('MadDBSmoke.app/PlugIns/' if embedded else '')+'MadDBSmokeTests.xctest/MadDBSmokeTests'
+                test=root/relative;test.parent.mkdir(parents=True);test.write_bytes(b'test')
+                self.assertEqual(set(simulator_products(root)),{app.resolve(),test.resolve()})
+                alias=root/('MadDBSmokeTests.xctest/MadDBSmokeTests' if embedded else 'MadDBSmoke.app/PlugIns/MadDBSmokeTests.xctest/MadDBSmokeTests')
+                alias.parent.mkdir(parents=True);alias.symlink_to(test)
+                self.assertEqual(len(simulator_products(root)),2)
+                alias.unlink();alias.write_bytes(b'other-test')
+                self.assertEqual(len(simulator_products(root)),3)
+    def test_missing_or_escaping_product(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/'products';root.mkdir()
+            app=root/'MadDBSmoke.app/MadDBSmoke';app.parent.mkdir();app.write_bytes(b'app')
+            with self.assertRaises(ValueError):simulator_products(root)
+            outside=Path(tmp)/'outside';outside.write_bytes(b'wrong')
+            test=root/'MadDBSmokeTests.xctest/MadDBSmokeTests';test.parent.mkdir();test.symlink_to(outside)
+            with self.assertRaises(ValueError):simulator_products(root)
     def test_exact_result(self):
         summary={'totalTestCount':1,'passedTests':1,'failedTests':0,'skippedTests':0}
         case={'nodeType':'Test Case','nodeIdentifier':'MadDBObsCompositionTests/testSQLitePrivateEventsDrain','result':'Passed'}

@@ -4,6 +4,10 @@ import MadDB
 
 final class MadDBObsCompositionTests: XCTestCase {
     func testSQLitePrivateEventsDrain() throws {
+        #if !targetEnvironment(simulator) || !arch(arm64)
+        XCTFail("Composition runtime requires ARM64 iOS simulator")
+        return
+        #endif
         let path = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: path, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(at: path) }

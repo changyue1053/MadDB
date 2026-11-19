@@ -17,3 +17,12 @@ Unsigned device build-for-testing verifies linking only. Exactly one named test 
 Four Linux source/project/result tests pass: unchanged base project bytes, Swift shipping API test placement, bridge isolation from hidden DB C API, and strict named result/count checks. Python syntax compilation passes. Native exact-pin syntax checking was attempted, but anonymous Git access failed DNS and the connector did not return all compatibility headers; no host-native compile or Apple build is claimed. Exact hosted compilation/linking and real runtime counts remain unverified.
 
 The prior direct C-ABI fixture design was rejected before publication because the shipping framework hides those symbols. It is removed from the candidate; the release export gate is unchanged. This replacement is explicitly host-forwarded synthetic outcome composition, not automatic database telemetry or proof of the original C wrapper path.
+
+
+## Simulator architecture gate correction
+
+Exact public 568033dc2774f29b2cf080c2ec705a6dfb58784c / run44508764359 passed OFF, both installed/relocated producers and unsigned device link; ON reached simulator ready but the attempted simulator `uname` execution failed. This successor no longer depends on a simulator-installed command-line uname. It first builds the test products for the exact job-created simulator, verifies ARM64 via lipo on both App and XCTest binaries at their explicit simulator product paths, then runs test-without-building on that same destination. The named Swift test itself fails unless targetEnvironment(simulator) and arch(arm64), so an executed passing case supplies the runtime boundary check. Exact result/count/privacy gates are unchanged. Device build remains unsigned/link-only.
+
+Cleanup attempts both shutdown and delete with separate 60-second bounds; a failure emits only a fixed label and fails the job. Local source tests verify placement/order and the target conditional, not real Xcode output layout or simulator execution. Actual hosted validation is still required.
+
+Hosted XCTest binary lookup accepts only the exact top-level MadDBSmokeTests.xctest binary or the exact named bundle under MadDBSmoke.app/PlugIns. At least one test binary and the App binary must exist. All distinct resolved files are inspected; aliases are deduplicated, and paths escaping the exact simulator products directory fail. Local fixtures cover both placements, aliases, two distinct test binaries, absence and escape.

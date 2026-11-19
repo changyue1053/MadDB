@@ -27,6 +27,23 @@ def run(args, stage, env=None, capture=False, timeout=600):
     print('PASS: '+stage, flush=True)
     return answer
 
+def simulator_products(products):
+    # No recursive discovery or unrelated test products. Keep resolved files inside
+    # this exact build product directory; de-duplicate aliases before inspection.
+    root=products.resolve(strict=True)
+    app=products/'MadDBSmoke.app/MadDBSmoke'
+    tests=[products/'MadDBSmokeTests.xctest/MadDBSmokeTests',
+           products/'MadDBSmoke.app/PlugIns/MadDBSmokeTests.xctest/MadDBSmokeTests']
+    if not app.is_file() or not any(p.is_file() for p in tests):
+        raise ValueError('expected simulator product missing')
+    found=[]
+    for path in [app]+tests:
+        if not path.is_file():continue
+        resolved=path.resolve(strict=True)
+        if not resolved.is_relative_to(root):raise ValueError('product escapes build directory')
+        if resolved not in found:found.append(resolved)
+    return found
+
 def main():
     if os.environ.get('MADDB_IOS_OBS') != 'ON': raise ValueError('explicit ON required')
     if platform.system()!='Darwin' or platform.machine()!='arm64': raise ValueError('Apple ARM64')
@@ -78,16 +95,27 @@ def main():
         try:
             run(['xcrun','simctl','boot',uuid],'simulator-boot',env)
             run(['xcrun','simctl','bootstatus',uuid,'-b'],'simulator-ready',env)
-            if run(['xcrun','simctl','spawn',uuid,'uname','-m'],'simulator-arm64',env,True).strip()!='arm64':raise ValueError('sim arch')
             result=work/'composition.xcresult'
-            run(base+['-destination',f'platform=iOS Simulator,id={uuid}','-destination-timeout','120','-derivedDataPath',work/'simulator','-resultBundlePath',result,'-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGN_IDENTITY=-','CODE_SIGNING_REQUIRED=NO','test'],'composition-test',env,timeout=1200)
+            test_args=base+['-destination',f'platform=iOS Simulator,id={uuid}', '-destination-timeout','120','-derivedDataPath',work/'simulator','-parallel-testing-enabled','NO','CODE_SIGNING_ALLOWED=YES','CODE_SIGN_IDENTITY=-','CODE_SIGNING_REQUIRED=NO']
+            run(test_args+['build-for-testing'],'composition-build-for-testing',env,timeout=900)
+            products=work/'simulator/Build/Products/Debug-iphonesimulator'
+            for binary in simulator_products(products):
+                if run(['xcrun','lipo','-archs',binary],'simulator-product-arm64',env,True).strip()!='arm64':raise ValueError('product architecture')
+            run(test_args+['-resultBundlePath',result,'test-without-building'],'composition-test',env,timeout=1200)
             summary=json.loads(run(['xcrun','xcresulttool','get','test-results','summary','--path',result],'result-summary',env,True))
             tree=json.loads(run(['xcrun','xcresulttool','get','test-results','tests','--path',result],'result-cases',env,True))
             verify(summary,tree)
             print('PASS: exact SQLite private-event runtime composition; no device execution',flush=True)
         finally:
+            cleanup_failed=False
             for action in ('shutdown','delete'):
-                subprocess.run(['xcrun','simctl',action,uuid],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+                try:
+                    outcome=subprocess.run(['xcrun','simctl',action,uuid],env=env,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+                    if outcome.returncode:cleanup_failed=True
+                except (OSError,subprocess.SubprocessError):cleanup_failed=True
+            if cleanup_failed:
+                print('FAIL: simulator-cleanup',flush=True)
+                raise RuntimeError('cleanup failure')
 if __name__=='__main__':
     try:main()
     except Exception:
