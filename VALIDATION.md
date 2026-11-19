@@ -54,3 +54,19 @@ This workflow definition has been statically checked but has not yet run. Its
 addition is not evidence that CI passed. It does not test the declared minimum
 Rust version or platforms other than Linux. GitHub's hosted runner image can change
 within the Ubuntu 24.04 label; the Rust compiler and package lock are pinned.
+
+
+## Native ABI candidate (not yet executed)
+
+The optional `c-api` slice adds versioned symbols, non-reused opaque handles,
+per-handle serialization, stable statuses, and caller-owned binary copy buffers.
+New tests cover empty versus missing, exact/short buffer behavior, stale handles,
+invalid arguments/UTF-8, concurrent close, lock independence and panic containment.
+A C11 consumer exercises on-disk reopen and binary CRUD through the shared library;
+a C++17 consumer checks header linkage. Both are connected to the pinned Linux CI.
+
+Local checks passed: C11/C++17 syntax under warning-as-error flags, shell syntax,
+workflow YAML parse, unchanged dependency lock, and whitespace checks. No local
+Rust toolchain is available: new Rust tests, shared-library build, linkage and
+host execution have NOT run. Earlier green CI covers only the prior source, not
+this ABI candidate. The declared minimum Rust/compiler/platform claims are unchanged.

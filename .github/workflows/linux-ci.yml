@@ -52,5 +52,8 @@ jobs:
       - name: Run standalone example
         run: cargo run --locked --offline --example standalone
 
+      - name: Test native C ABI and C++ header
+        run: bash scripts/test-c-api.sh
+
       - name: Verify lockfile was not changed
         run: git diff --exit-code -- Cargo.lock

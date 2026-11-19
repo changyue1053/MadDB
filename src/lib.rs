@@ -137,3 +137,6 @@ impl Database {
     #[cfg(feature = "madobs")]
     pub fn metrics(&self) -> Metrics { self.metrics }
 }
+
+#[cfg(feature = "c-api")]
+pub mod ffi;

@@ -36,7 +36,8 @@ Host apps own path choice, directories, permissions, backup and lifecycle.
 
 This is a synchronous Rust library tested on Linux only. Use a background worker
 where blocking the UI matters. Rust applications can integrate it directly; there
-is no C ABI, Swift/Kotlin binding, WASM bundle, mobile package, async pool, or tested
+is an opt-in experimental C ABI, but no Swift/Kotlin binding, WASM bundle, mobile
+package, async pool, or tested
 multi-process workload yet. No schema migration beyond creating version 1 exists.
 The `madobs` feature is a narrow future integration seam, not the MadObs SDK.
 
@@ -60,3 +61,34 @@ support. Crates.io publication remains disabled (`publish = false`).
 First-party MadDB code is licensed under MIT; see LICENSE. Third-party dependencies
 retain their own licenses. Exact locked dependency notices and provenance are
 in THIRD_PARTY_NOTICES.md and third-party/.
+
+
+## Experimental native C ABI (v1)
+
+Enable `c-api` to export the functions in `include/maddb.h` from the `cdylib`.
+The Rust API and MadObs remain independent; no new dependency is required.
+`maddb_abi_version()` returns 1. ABI status values are fixed int32 codes, not Rust
+enum layouts. Opaque uint64 handles are process-local tokens, never raw pointers.
+Each handle has its own operation lock; close removes the token and waits for its
+slot before dropping SQLite. A brief registry lock does not cover SQLite work.
+
+Use UTF-8 length-delimited keys and arbitrary binary values. Paths also require
+UTF-8, excluding embedded NUL. `maddb_get` copies into caller-owned memory, never
+returns Rust storage, never partially copies, and distinguishes missing from empty.
+Size probing and copying are separate reads: retry if another writer changes size.
+Read the header for valid-pointer/non-overlap obligations and close races. Tokens
+avoid use-after-free from stale handles, but cannot make invalid C pointers safe.
+This is not a security boundary between code in the same process.
+
+Linux validation plan after `cargo fetch --locked`:
+
+```
+cargo test --locked --offline --all-features
+bash scripts/test-c-api.sh
+```
+
+The script builds the shared library, links and runs a real C11 file-persistence
+consumer, and links/runs a C++17 header consumer. It is wired into Linux CI.
+This slice has only been statically checked locally: Rust compilation, ABI linkage,
+and runtime behavior must pass CI before integration. No Android/iOS/HarmonyOS
+packaging or native-platform compatibility is claimed. No encryption is added.
