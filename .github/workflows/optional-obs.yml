@@ -31,4 +31,9 @@ jobs:
         run: MADOBS_INCLUDE_DIR="$GITHUB_WORKSPACE/target/obs-header/include" bash scripts/test-obs-integration.sh
       - name: Lockfile remains unchanged
         run: git diff --exit-code -- Cargo.lock
-      # No MadObs runtime, network sink, uploads or dependency redistribution.
+      # Earlier steps use only the observer header; the explicit-ON step below adds the local runtime.
+      # No network sink, uploads or dependency redistribution.
+      - name: Installed real null-provider runtime and bounded local sink
+        env:
+          MADDB_WITH_MADOBS_RUNTIME: 'ON'
+        run: bash scripts/test-obs-runtime.sh
