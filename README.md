@@ -99,3 +99,9 @@ The first optional Android adapter and independent AAR-consuming test app are in
 [android/](android/README.md). Scope is only `arm64-v8a`, API 26+, plaintext SQLite,
 no Obs requirement. The read-only build workflow and explicit ARM64/device/16 KiB
 verification gates are documented there. Android is not yet a validated release.
+
+## iOS binary preview
+
+The [iOS preview recipe](ios/README.md) packages a standalone Swift XCFramework
+for arm64 device and arm64 Simulator. Its new CI gates are pending execution;
+packaging, simulator execution and physical-device validation are separate.

@@ -1,0 +1,49 @@
+name: iOS ARM64 binary and simulator checks
+on:
+  push:
+    branches: [main, checkpoint/maddb-source-preview]
+  pull_request:
+    branches: [main, checkpoint/maddb-source-preview]
+permissions:
+  contents: read
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      RUSTUP_TOOLCHAIN: 1.100.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+      - name: Verify preinstalled Apple tools and prepare pinned Rust
+        run: |
+          test "$(uname -m)" = arm64
+          test "$(xcodebuild -version)" = $'Xcode 26.2\nBuild version 17C52'
+          # Do not accept licenses or install Apple SDKs/runtimes. Missing tools fail.
+          xcrun simctl list runtimes available
+          rustup toolchain install 1.100.0 --profile minimal --no-self-update
+          rustup target add --toolchain 1.100.0 aarch64-apple-ios aarch64-apple-ios-sim
+          cargo fetch --locked --target aarch64-apple-ios --target aarch64-apple-ios-sim
+      - name: Build and inspect standalone XCFramework
+        run: |
+          python3 scripts/test-ios-package-inspector.py
+          bash scripts/build-ios.sh
+      - name: Build independent device consumer (unsigned, no device execution)
+        run: |
+          xcodebuild -project ios/Smoke/MadDBSmoke.xcodeproj -scheme MadDBSmoke \
+            -destination 'generic/platform=iOS' -derivedDataPath build/ios/device-consumer \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
+      - name: Execute independent binary consumer on job-owned ARM64 iOS simulator
+        run: bash scripts/test-ios-simulator.sh
+      # No uploads, releases, provisioning updates, Apple account or physical devices.

@@ -7,3 +7,6 @@
 /android/.gradle/
 /android/**/build/
 /android/local.properties
+
+/build/
+/ios/Smoke/DerivedData/
