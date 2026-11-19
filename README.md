@@ -92,3 +92,10 @@ consumer, and links/runs a C++17 header consumer. It is wired into Linux CI.
 This slice has only been statically checked locally: Rust compilation, ABI linkage,
 and runtime behavior must pass CI before integration. No Android/iOS/HarmonyOS
 packaging or native-platform compatibility is claimed. No encryption is added.
+
+## Android-native source preview
+
+The first optional Android adapter and independent AAR-consuming test app are in
+[android/](android/README.md). Scope is only `arm64-v8a`, API 26+, plaintext SQLite,
+no Obs requirement. The read-only build workflow and explicit ARM64/device/16 KiB
+verification gates are documented there. Android is not yet a validated release.

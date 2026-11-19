@@ -4,3 +4,6 @@
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+/android/.gradle/
+/android/**/build/
+/android/local.properties

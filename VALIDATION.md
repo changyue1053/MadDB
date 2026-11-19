@@ -70,3 +70,18 @@ workflow YAML parse, unchanged dependency lock, and whitespace checks. No local
 Rust toolchain is available: new Rust tests, shared-library build, linkage and
 host execution have NOT run. Earlier green CI covers only the prior source, not
 this ABI candidate. The declared minimum Rust/compiler/platform claims are unchanged.
+
+## Android-native candidate
+
+The Android slice preserves Rust source, C ABI/header, Cargo manifest and lock.
+Local checks: shell/YAML/XML parsing; JNI C warning-as-error syntax check using the
+public Android JNI header; pure-Java wrapper/smoke classes compiled with the existing
+JDK compiler module using source/target 17. This host compiler uses JDK 21 APIs:
+`--release 17` was unavailable in the local stripped runtime, so Android/Java API
+compatibility remains a real Gradle/SDK build gate. Generated JNI descriptors match
+the C registration signatures. No fake native library or Android runtime was used.
+
+No Rust Android compiler, NDK, Gradle, SDK, adb or device was installed locally.
+Android compilation/linking, AAR/APK inspection, instrumentation execution and 16 KiB
+runtime tests have not run. Hosted build-only workflow is prepared but not published
+or executed as part of this source change. See android/README.md for exact gates.

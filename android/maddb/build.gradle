@@ -1,0 +1,30 @@
+plugins { id 'com.android.library' }
+android {
+    namespace 'io.maddb'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+    ndkVersion '28.2.13676358'
+    defaultConfig {
+        minSdk 26
+        ndk { abiFilters 'arm64-v8a' }
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    sourceSets.main.jniLibs.srcDirs = [layout.buildDirectory.dir('generated/jniLibs')]
+    sourceSets.main.assets.srcDirs = [layout.buildDirectory.dir('generated/assets')]
+}
+tasks.register('buildMadDbNative', Exec) {
+    workingDir rootProject.projectDir.parentFile
+    commandLine 'bash', 'scripts/build-android-native.sh'
+    // Always verify exact native toolchain and rebuild via Cargo's own incrementality.
+}
+tasks.named('preBuild').configure { dependsOn 'buildMadDbNative' }
+tasks.register('versionedAar', Copy) {
+    dependsOn 'assembleRelease'
+    from layout.buildDirectory.file('outputs/aar/maddb-release.aar')
+    into layout.buildDirectory.dir('versioned')
+    rename { "maddb-android-${project.version}-arm64-v8a.aar" }
+}
