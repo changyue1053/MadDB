@@ -1,0 +1,34 @@
+name: Optional MadObs local integration
+on:
+  push:
+    branches: [checkpoint/maddb-source-preview]
+permissions:
+  contents: read
+concurrency:
+  group: optional-obs-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  local-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: 1.100.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Stage exact public observer header anonymously
+        run: bash scripts/stage-public-obs-header.sh
+      - name: Pinned Rust and locked dependencies
+        run: |
+          mkdir -p target/obs-real
+          if ! (rustup toolchain install 1.100.0 --profile minimal --no-self-update && cargo fetch --locked) >target/obs-real/tools.log 2>&1; then
+            echo 'FAIL: obs-integration-tools'; exit 1
+          fi
+      - name: Mock ABI wrapper contracts (not SQLite)
+        run: make -C adapters/obs test MADOBS_INCLUDE_DIR="$GITHUB_WORKSPACE/target/obs-header/include"
+      - name: Real SQLite library and local recording sink
+        run: MADOBS_INCLUDE_DIR="$GITHUB_WORKSPACE/target/obs-header/include" bash scripts/test-obs-integration.sh
+      - name: Lockfile remains unchanged
+        run: git diff --exit-code -- Cargo.lock
+      # No MadObs runtime, network sink, uploads or dependency redistribution.
