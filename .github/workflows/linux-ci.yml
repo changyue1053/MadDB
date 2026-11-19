@@ -1,0 +1,56 @@
+name: Linux source checks
+
+on:
+  push:
+    branches: [main, checkpoint/maddb-source-preview]
+  pull_request:
+    branches: [main, checkpoint/maddb-source-preview]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-source-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUSTUP_TOOLCHAIN: 1.100.0
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Rust 1.100.0 / Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out this revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+
+      - name: Select exact Rust toolchain
+        run: |
+          rustup toolchain install 1.100.0 --profile minimal --no-self-update
+          rustc --version
+          cargo --version
+
+      - name: Fetch locked public dependencies
+        run: cargo fetch --locked
+
+      - name: Test default features
+        run: cargo test --locked --offline
+
+      - name: Test all features
+        run: cargo test --locked --offline --all-features
+
+      - name: Run standalone example
+        run: cargo run --locked --offline --example standalone
+
+      - name: Verify lockfile was not changed
+        run: git diff --exit-code -- Cargo.lock

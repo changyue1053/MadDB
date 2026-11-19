@@ -39,3 +39,18 @@ crash/power-loss exercise, hostile database test, cross-process concurrency stre
 or performance benchmark has been completed. There is no encryption implementation
 or encryption validation claim. Passing local tests is not a production-readiness
 claim.
+
+## Linux CI definition
+
+The source-check workflow targets GitHub-hosted Ubuntu 24.04 and exactly Rust
+1.100.0, not a floating stable toolchain. It fetches dependencies with Cargo.lock
+locked, then runs default-feature tests, all-feature tests, and the standalone
+example offline. Checkout is pinned to the public actions/checkout v7.0.1 commit.
+Permissions are read-only; checkout credentials are not persisted. There are no
+secret inputs, cache/artifact uploads, deployment steps, releases, or package
+publishing. Only normal push and pull_request events are used.
+
+This workflow definition has been statically checked but has not yet run. Its
+addition is not evidence that CI passed. It does not test the declared minimum
+Rust version or platforms other than Linux. GitHub's hosted runner image can change
+within the Ubuntu 24.04 label; the Rust compiler and package lock are pinned.
