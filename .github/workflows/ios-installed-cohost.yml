@@ -1,0 +1,77 @@
+name: iOS installed SDK cohost
+'on':
+  push:
+    branches: [checkpoint/maddb-ios-installed-cohost]
+permissions:
+  contents: read
+jobs:
+  installed:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/checkpoint/maddb-ios-installed-cohost'
+    runs-on: macos-15
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ['off', 'on']
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      RUSTUP_TOOLCHAIN: 1.100.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      - name: Exact base, stock Apple tools and existing pinned Rust preparation
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = b60392d56be3ef3f7fd1db2c9547e98a535aa0d1
+          test "$(git rev-parse 'HEAD^1^{tree}')" = b231055e5421f64cf5063e21088fab1dcc35006f
+          test -z "$(git status --porcelain)"
+          git diff --quiet HEAD^ HEAD -- ios scripts src include Cargo.lock
+          test "$(uname -m)" = arm64
+          test "$(xcodebuild -version)" = $'Xcode 26.2\nBuild version 17C52'
+          rustup toolchain install 1.100.0 --profile minimal --no-self-update
+          rustup target add --toolchain 1.100.0 aarch64-apple-ios aarch64-apple-ios-sim
+          cargo fetch --locked --target aarch64-apple-ios --target aarch64-apple-ios-sim
+      - name: Pinned installed frameworks and app-owned Simulator check
+        shell: bash
+        env:
+          OBS_MODE: ${{ matrix.mode }}
+          GIT_CONFIG_NOSYSTEM: '1'
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_TERMINAL_PROMPT: '0'
+          CARGO_NET_OFFLINE: 'true'
+        run: |
+          root="$(mktemp -d "${RUNNER_TEMP}/mad-ios-cohost-inputs.XXXXXXXX")"
+          trap 'rm -rf -- "$root"' EXIT
+          fetch_public() {
+            local remote="$1" rev="$2" tree="$3" dest="$4"
+            {
+              git init -q -- "$dest" &&
+              git -C "$dest" -c credential.helper= -c http.extraHeader= -c http.followRedirects=false \
+                 fetch --depth=1 --no-tags "$remote" "$rev" &&
+              test "$(git -C "$dest" rev-parse FETCH_HEAD)" = "$rev" &&
+              test "$(git -C "$dest" rev-parse 'FETCH_HEAD^{tree}')" = "$tree"
+            } >/dev/null 2>&1
+          }
+          fetch_public https://github.com/changyue1053/MadLink.git \
+            80c9d8ffd23a5911b4f2eb71b5408b1d57717f2a d2fd4ed05b6bd29d65b3011a6febce99dc912a4a "$root/link" ||
+            { echo 'FAIL: pinned public MadLink receipt'; exit 1; }
+          args=(--link-repo "$root/link")
+          case "$OBS_MODE" in
+            on)
+              fetch_public https://github.com/changyue1053/MadObs.git \
+                af06c481226fe9abddae5218e022f52683784e3e 4ac71eee165885687a8a4c90ebfaf85a00b098a7 "$root/obs" ||
+                { echo 'FAIL: pinned public MadObs receipt'; exit 1; }
+              args+=(--obs-repo "$root/obs") ;;
+            off) ;;
+            *) echo 'FAIL: explicit observation mode'; exit 1 ;;
+          esac
+          env -u PYTHONPATH python3 -B ios-cohost/test_verify.py
+          env -u PYTHONPATH python3 -B ios-cohost/verify.py "${args[@]}"
+          git diff --quiet -- Cargo.lock
+          printf '%s\n' 'ARM64 iOS Simulator only: independent installed Swift DB, tracked Link C ABI and opt-in app-owned bounded local observation. No physical, network, release or parity claim.' >> "$GITHUB_STEP_SUMMARY"
