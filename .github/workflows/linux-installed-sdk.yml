@@ -1,0 +1,33 @@
+name: Linux installed MadDB C ABI acceptance
+on:
+  push:
+    branches: [checkpoint/maddb-linux-installed-sdk]
+permissions:
+  contents: read
+concurrency:
+  group: linux-installed-sdk-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  installed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: 1.100.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+      - name: Exact checkout and existing pinned public Rust preparation
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          rustup toolchain install 1.100.0 --profile minimal --no-self-update
+          cargo fetch --locked
+      - name: Offline install, relocate, configure independent apps and verify separate stores
+        run: bash scripts/test-linux-installed-sdk.sh
+      - name: Preserve Cargo lockfile
+        run: git diff --exit-code -- Cargo.lock
+      # No MadObs reference package, artifacts, release, or device.

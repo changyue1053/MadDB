@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.20)
+project(MadDBConsumera LANGUAGES C)
+find_package(MadDB CONFIG REQUIRED)
+if(DEFINED MADDB_EXPECTED_PREFIX)
+  get_target_property(_selected MadDB::MadDB IMPORTED_LOCATION)
+  get_target_property(_headers MadDB::MadDB INTERFACE_INCLUDE_DIRECTORIES)
+  if(NOT MadDB_CONFIG STREQUAL "${MADDB_EXPECTED_PREFIX}/lib/cmake/MadDB/MadDBConfig.cmake"
+     OR NOT _selected STREQUAL "${MADDB_EXPECTED_PREFIX}/lib/libmaddb.so"
+     OR NOT _headers STREQUAL "${MADDB_EXPECTED_PREFIX}/include")
+    message(FATAL_ERROR "Unexpected MadDB config, library or headers")
+  endif()
+endif()
+add_executable(consumer-a main.c)
+target_compile_features(consumer-a PRIVATE c_std_11)
+target_compile_options(consumer-a PRIVATE -Wall -Wextra -Wpedantic -Werror)
+target_link_libraries(consumer-a PRIVATE MadDB::MadDB)
+set_target_properties(consumer-a PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
