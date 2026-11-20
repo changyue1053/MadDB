@@ -76,6 +76,10 @@ No Maven deployment, app-store upload, release signing key, or artifact upload e
    substitute. The target must report kernel `aarch64`/`arm64`, primary ABI
    `arm64-v8a`, and page size `4096`. Merely listing ARM in `abilist` is insufficient.
    No emulator/device is used by the build-only workflow.
+   The test independently checks `Os.uname().machine`, a 64-bit process, primary
+   `Build.SUPPORTED_ABIS[0]`, and `Os.sysconf(OsConstants._SC_PAGESIZE)` before
+   exercising the database. It requires an explicit instrumentation argument
+   `maddb_expected_page_size` of `4096` or `16384`; there is no default.
 4. **16 KiB runtime**: confirm `adb shell getconf PAGE_SIZE` is 16384 and rerun the
    same persistent tests. ELF/ZIP alignment alone is not runtime proof.
 
@@ -88,7 +92,7 @@ EXPECTED_PAGE_SIZE=16384 ANDROID_SERIAL=<authorized-16k-arm64-target> bash scrip
 ```
 
 No device was discovered, attached or modified during source preparation. The
-architecture/page-size regression uses a synthetic adb command responder only;
+architecture/page-size shell regression uses a synthetic adb command responder only;
 it is **not** Android or instrumentation execution. Both actual 4 KiB and 16 KiB
 ARM64 runtime gates remain pending. Properties are a compatibility check on an
 authorized trusted target, not hardware attestation against a malicious device.
@@ -100,7 +104,9 @@ instrumentation APK together using the pinned tools above. Do not use a moving
 branch, claim APKs were downloaded from these runs, or mix APKs from different
 commits. The test script installs the locally rebuilt pair only; selecting a serial
 is not itself authorization to install. The old `REQUIRE_16K` flag is rejected in
-favor of the explicit `EXPECTED_PAGE_SIZE` modes.
+favor of the explicit `EXPECTED_PAGE_SIZE` modes. The script forwards that exact
+mode as the instrumentation argument. A separately authorized managed runner
+that launches instrumentation directly must also supply the explicit argument.
 
 Primary references:
 - https://developer.android.com/ndk/guides/other_build_systems

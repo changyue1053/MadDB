@@ -19,7 +19,10 @@ page_size=$(adb -s "$ANDROID_SERIAL" shell getconf PAGE_SIZE | tr -d '\r')
 echo "Target runtime kernel: $machine; primary ABI: $abi; page size: $page_size"
 adb -s "$ANDROID_SERIAL" install -r android/smoke-app/build/outputs/apk/debug/smoke-app-debug.apk
 adb -s "$ANDROID_SERIAL" install -r android/smoke-app/build/outputs/apk/androidTest/debug/smoke-app-debug-androidTest.apk
-result=$(adb -s "$ANDROID_SERIAL" shell am instrument -w -r io.maddb.smoke.test/android.test.InstrumentationTestRunner)
+result=$(adb -s "$ANDROID_SERIAL" shell am instrument -w -r \
+    -e maddb_expected_page_size "$EXPECTED_PAGE_SIZE" io.maddb.smoke.test/android.test.InstrumentationTestRunner)
 printf '%s\n' "$result"
 grep -Fq 'OK (1 test)' <<< "$result"
-! grep -Eq 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' <<< "$result"
+if grep -Eq 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' <<< "$result"; then
+    exit 1
+fi
