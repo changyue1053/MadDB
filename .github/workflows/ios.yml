@@ -1,7 +1,7 @@
 name: iOS ARM64 binary and simulator checks
 on:
   push:
-    branches: [main, checkpoint/maddb-source-preview, checkpoint/maddb-ios-store-acceptance]
+    branches: [main, checkpoint/maddb-source-preview, checkpoint/maddb-ios-store-acceptance, checkpoint/maddb-ios-two-apps]
   pull_request:
     branches: [main, checkpoint/maddb-source-preview]
 permissions:
@@ -47,4 +47,9 @@ jobs:
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
       - name: Execute independent binary consumer on job-owned ARM64 iOS simulator
         run: bash scripts/test-ios-simulator.sh
+      - name: Two installed apps reopen their own stores in new processes
+        if: github.ref == 'refs/heads/checkpoint/maddb-ios-two-apps'
+        run: |
+          python3 -B scripts/test-ios-two-apps-fixtures.py
+          python3 -B scripts/test-ios-two-apps.py
       # No uploads, releases, provisioning updates, Apple account or physical devices.

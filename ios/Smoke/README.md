@@ -87,3 +87,34 @@ failures/skips using xcresult, not just xcodebuild's exit code. Raw simulator
 output stays local; only fixed result labels escape. Local checks cover parser
 regressions and script syntax only; Swift compilation and actual simulator
 acceptance require the next authorized hosted run.
+
+## Two independently installed simulator apps (dedicated acceptance branch)
+
+The Apple CI branch `checkpoint/maddb-ios-two-apps` runs an additional check
+after the ten-case smoke suite. It copies the sample project and one shared
+XCFramework to a temporary layout, verifies exact file hashes, and builds two
+ARM64 app identities from that template into separate product directories.
+Only the disposable simulator created by the check is installed into, launched,
+terminated and deleted. Local ad-hoc simulator signing requires no identity or
+account. The framework is embedded by Xcode; identical input package hashes do
+not imply identical signatures on the embedded copies. Before install, each
+app must be a thin ARM64 iOS-simulator executable, link exactly one MadDB
+dependency at `@rpath/MadDB.framework/MadDB` and resolve via the embedded
+Frameworks runpath. Both embedded frameworks must match the packaged simulator
+binary's install name, Mach-O UUID and SHA-256 hashes of every nonempty
+executable section (including `__TEXT,__text`). Code-signature bytes are excluded
+from the identity comparison.
+
+Both apps use the same relative Application Support database filename, namespace
+and key. Each requires the initial key to be absent and writes a distinct fixed
+binary sentinel. After both processes terminate the driver launches both again;
+each fresh process must reopen SQLite and read its exact sentinel. Atomic app
+receipts must match the fixed bundle, host-generated nonce, phase, simulator
+launch PID and exact bytes. The host reads receipts only in two corroborated,
+distinct data containers owned by that simulator. No paths, receipts or binary
+artifacts are published. The driver uses Apple's [Simulator tools](https://developer.apple.com/videos/play/wwdc2020/10647/).
+
+This is independent application/process/store acceptance on Simulator, not
+physical-device, App Store, shared-container, crash or security testing. Local
+fixture checks are not simulator results; actual build and execution require
+the Apple CI run. No MadObs dependency is part of this gate.
