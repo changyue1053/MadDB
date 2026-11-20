@@ -1,0 +1,57 @@
+name: Linux installed SDK API-only cohost
+'on':
+  push:
+    branches: [checkpoint/maddb-linux-installed-cohost-api]
+permissions:
+  contents: read
+jobs:
+  installed:
+    if: github.ref == 'refs/heads/checkpoint/maddb-linux-installed-cohost-api' && github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: 1.100.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      - name: Verify exact base and prepare locked Rust inputs
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = 88d78e03d4ba0ec0aeee80ecd2c22cff759bb8fe
+          test -z "$(git status --porcelain)"
+          rustup toolchain install 1.100.0 --profile minimal --no-self-update
+          cargo fetch --locked
+      - name: Real relocated API-only cohost and local collector
+        shell: bash
+        run: |
+          scratch="$(mktemp -d "${RUNNER_TEMP}/mad-cohost-api.XXXXXXXX")"
+          trap 'rm -rf -- "$scratch"' EXIT
+          mkdir "$scratch/home"
+          git_public() {
+            env -i PATH="$PATH" HOME="$scratch/home" LC_ALL=C GIT_CONFIG_NOSYSTEM=1 \
+              GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 \
+              git -c credential.helper= -c http.extraHeader= -c http.followRedirects=false "$@"
+          }
+          fetch_public() {
+            local url="$1" pin="$2" tree="$3" dir="$4"
+            {
+              git_public init -q -- "$dir" &&
+              git_public -C "$dir" fetch --depth=1 --no-tags "$url" "$pin" &&
+              test "$(git_public -C "$dir" rev-parse FETCH_HEAD)" = "$pin" &&
+              test "$(git_public -C "$dir" rev-parse 'FETCH_HEAD^{tree}')" = "$tree"
+            } >/dev/null 2>&1
+          }
+          fetch_public https://github.com/changyue1053/MadLink.git \
+            a6d869efd8a5b3f2eb1f31e9b5c1a37392251867 e6ee8b6ef2c8f8bfd30e5ac90ae05d7811a12350 "$scratch/link" ||
+            { echo 'FAIL: pinned public MadLink receipt'; exit 1; }
+          fetch_public https://github.com/changyue1053/MadObs.git \
+            79fd8ced44a18bca574598ff683cd706ded16a60 fa87aed52ec6d748addacb2f8d57ac30e5976271 "$scratch/obs" ||
+            { echo 'FAIL: pinned public MadObs receipt'; exit 1; }
+          python3 -I -B samples/installed_cohost_api/test_verify.py
+          python3 -I -B samples/installed_cohost_api/verify.py --link-repo "$scratch/link" --obs-repo "$scratch/obs"
+          git diff --exit-code -- Cargo.lock
