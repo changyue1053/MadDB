@@ -1,0 +1,70 @@
+name: Linux installed SDK cohost
+'on':
+  push:
+    branches: [checkpoint/maddb-linux-installed-cohost]
+permissions:
+  contents: read
+jobs:
+  installed:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/checkpoint/maddb-linux-installed-cohost'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        observation: ['off', 'on']
+    env:
+      RUSTUP_TOOLCHAIN: 1.100.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+          submodules: false
+          lfs: false
+      - name: Verify public base and prepare existing locked Rust inputs
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = 5395df380c06d86f56e835585f3a2827abd9f397
+          test -z "$(git status --porcelain)"
+          rustup toolchain install 1.100.0 --profile minimal --no-self-update
+          cargo fetch --locked
+      - name: Compose independent pinned installs and verify the selected runtime mode
+        shell: bash
+        env:
+          OBS_MODE: ${{ matrix.observation }}
+          GIT_CONFIG_NOSYSTEM: '1'
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_TERMINAL_PROMPT: '0'
+        run: |
+          scratch="$(mktemp -d "${RUNNER_TEMP}/mad-installed-cohost.XXXXXXXX")"
+          trap 'rm -rf -- "$scratch"' EXIT
+          fetch_public() {
+            local origin="$1" rev="$2" tree="$3" dir="$4"
+            {
+              git init -q -- "$dir" &&
+              git -C "$dir" -c credential.helper= -c http.extraHeader= -c http.followRedirects=false \
+                fetch --depth=1 --no-tags "$origin" "$rev" &&
+              test "$(git -C "$dir" rev-parse FETCH_HEAD)" = "$rev" &&
+              test "$(git -C "$dir" rev-parse 'FETCH_HEAD^{tree}')" = "$tree"
+            } > /dev/null 2>&1
+          }
+          fetch_public https://github.com/changyue1053/MadLink.git \
+            a6d869efd8a5b3f2eb1f31e9b5c1a37392251867 e6ee8b6ef2c8f8bfd30e5ac90ae05d7811a12350 "$scratch/link" ||
+            { echo 'FAIL: pinned public MadLink receipt'; exit 1; }
+          args=(--link-repo "$scratch/link")
+          case "$OBS_MODE" in
+            'on')
+              fetch_public https://github.com/changyue1053/MadObs.git \
+                79fd8ced44a18bca574598ff683cd706ded16a60 fa87aed52ec6d748addacb2f8d57ac30e5976271 "$scratch/obs" ||
+                { echo 'FAIL: pinned public MadObs receipt'; exit 1; }
+              args+=(--obs-repo "$scratch/obs")
+              ;;
+            'off') ;;
+            *) echo 'FAIL: explicit observation mode required'; exit 1 ;;
+          esac
+          python3 -I -B samples/installed_cohost/test_verify.py
+          python3 -I -B samples/installed_cohost/verify.py "${args[@]}"
+          git diff --exit-code -- Cargo.lock
+          printf '%s\n' 'Linux host synthetic cohost only. No network operation, product integration, per-event delivery, mobile or release evidence.' >> "$GITHUB_STEP_SUMMARY"
