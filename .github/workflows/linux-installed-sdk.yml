@@ -1,7 +1,7 @@
 name: Linux installed MadDB C ABI acceptance
 on:
   push:
-    branches: [checkpoint/maddb-linux-installed-sdk]
+    branches: [checkpoint/maddb-linux-installed-sdk, checkpoint/maddb-linux-lock-recovery]
 permissions:
   contents: read
 concurrency:
@@ -26,8 +26,13 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           rustup toolchain install 1.100.0 --profile minimal --no-self-update
           cargo fetch --locked
-      - name: Offline install, relocate, configure independent apps and verify separate stores
-        run: bash scripts/test-linux-installed-sdk.sh
+      - name: Offline install, relocate, configure independent apps and verify separate stores and lock recovery
+        run: |
+          if [[ "$GITHUB_REF_NAME" == checkpoint/maddb-linux-lock-recovery ]]; then
+            bash scripts/test-linux-installed-sdk.sh --lock-recovery
+          else
+            bash scripts/test-linux-installed-sdk.sh
+          fi
       - name: Preserve Cargo lockfile
         run: git diff --exit-code -- Cargo.lock
       # No MadObs reference package, artifacts, release, or device.

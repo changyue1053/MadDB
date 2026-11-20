@@ -40,3 +40,19 @@ OS sandbox proof, crypto, production durability, or a user schema change.
 `checkpoint/maddb-linux-installed-sdk` runs the isolated GitHub Actions gate.
 Existing package and platform workflows are unchanged. Local syntax/static
 tests do not replace actual Rust/CMake/SQLite execution.
+
+The separate `checkpoint/maddb-linux-lock-recovery` workflow branch runs the
+original gate plus cross-process SQLite lock recovery on the same relocated
+executables (no rebuild). The original branch keeps its baseline checks.
+A opens a new store and seeds the original value. A separate Python stdlib
+SQLite witness obtains `BEGIN IMMEDIATE` on A's file, changes one row without
+committing, then holds the transaction while A reads only the original value
+and receives exactly `MADDB_STORAGE_ERROR` on its attempted replacement. B
+can commit and reopen its own store with the same namespace/key while A's
+store remains locked. The witness rolls back and checks the original bytes;
+A then uses the same still-live handle to read the original and commit a
+different value. Fresh processes reopen both stores and check that their
+values remain distinct. Fixed watchdogs bound synchronization and subprocess
+waits; they are not latency assertions. The witness's SQL applies only to
+these temporary synthetic fixtures. This checks the same installed Linux
+build, not migration, crash/power-loss durability, WAL, or physical devices.

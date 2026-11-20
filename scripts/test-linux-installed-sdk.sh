@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+case "$#:${1-}" in
+    0:) lock_recovery=no ;;
+    1:--lock-recovery) lock_recovery=yes ;;
+    *) printf 'FAIL: linux-sdk-test-arguments\n' >&2; exit 2 ;;
+esac
 cd "$(dirname "$0")/.."
 root=$PWD
 work=$(mktemp -d "$(realpath "${TMPDIR:-/tmp}")/maddb-linux.XXXXXXXX")
@@ -55,3 +60,10 @@ for app in a b; do
     test "$rc" = 2
 done
 printf 'PASS: two independent installed Linux consumers store and reopen distinct data\n' >&3
+if [[ $lock_recovery == yes ]]; then
+    stage=linux-sdk-cross-process-lock-recovery
+    mkdir "$work/lock-recovery"
+    python3 -I "$root/linux-consumers/lock_recovery.py" \
+      "$work/build-a/consumer-a" "$work/build-b/consumer-b" "$work/lock-recovery"
+    printf 'PASS: installed Linux lock rejection, recovery and store isolation\n' >&3
+fi
