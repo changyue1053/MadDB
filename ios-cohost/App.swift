@@ -39,7 +39,7 @@ public final class MadCohostDriver: NSObject {
         #endif
         guard let state else { return false } // Native callback state might need the folder until process exit.
         func report(_ operation: UInt32) -> Bool {
-            #if COHOST_OBS
+            #if COHOST_OBS || COHOST_OBS_API
             return mco_db_report(state, operation) == 1
             #else
             return true

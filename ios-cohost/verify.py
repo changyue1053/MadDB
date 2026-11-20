@@ -17,6 +17,7 @@ from prepare import prepare
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parent
 PINS={
+    "db-api":("951ed05a210a2e722edf79fc6f5a6cd8acbd53b8","21eace33e39a16fe4e5b97b121fdd2361b8adb31"),
     "db":("b60392d56be3ef3f7fd1db2c9547e98a535aa0d1","b231055e5421f64cf5063e21088fab1dcc35006f"),
     "link":("80c9d8ffd23a5911b4f2eb71b5408b1d57717f2a","d2fd4ed05b6bd29d65b3011a6febce99dc912a4a"),
     "obs":("af06c481226fe9abddae5218e022f52683784e3e","4ac71eee165885687a8a4c90ebfaf85a00b098a7"),
@@ -120,12 +121,52 @@ def make_obs(source,work,dest):
         args.extend(("-library",prefix/"lib/libmadobs_runtime.a","-headers",headers))
     run("obs-package","xcodebuild","-create-xcframework",*args,"-output",dest)
 
+API_ONLY_FILES={"include/madobs/observer.h","include/madobs/privacy.h",
+                "lib/cmake/MadObs/MadObsApiTargets.cmake","lib/cmake/MadObs/MadObsConfig.cmake",
+                "lib/cmake/MadObs/MadObsConfigVersion.cmake"}
+
+def api_inventory(prefix):
+    require(set(digest(prefix))==API_ONLY_FILES,"api-only-inventory")
+    return inside(prefix,"include")
+
+def make_obs_api(source,work,dest):
+    build=work/"api-only build"
+    prefix=work/"api-only prefix"
+    run("api-only-configure","cmake","-S",source,"-B",build,
+        "-DBUILD_TESTING=OFF","-DMADOBS_BUILD_RUNTIME=OFF","-DMADOBS_BUILD_SHARED=OFF",
+        "-DMADOBS_BUILD_JNI=OFF","-DMADOBS_PACKAGE_BORINGSSL=OFF",
+        "-DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF","-DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF")
+    run("api-only-install","cmake","--install",build,"--prefix",prefix)
+    shutil.move(prefix,dest)
+
+def prove_api_target(work, prefix):
+    src=work/"api target probe"
+    src.mkdir()
+    (src/"CMakeLists.txt").write_text(
+        'cmake_minimum_required(VERSION 3.20)\nproject(ApiProbe NONE)\n'
+        'find_package(MadObs 0.1.0 EXACT CONFIG REQUIRED PATHS "${ROOT}" NO_DEFAULT_PATH)\n'
+        'if(NOT TARGET MadObs::api OR TARGET MadObs::runtime)\n'
+        '  message(FATAL_ERROR "unexpected MadObs targets")\nendif()\n'
+        'get_target_property(kind MadObs::api TYPE)\n'
+        'get_target_property(headers MadObs::api INTERFACE_INCLUDE_DIRECTORIES)\n'
+        'get_target_property(links MadObs::api INTERFACE_LINK_LIBRARIES)\n'
+        'if(NOT kind STREQUAL "INTERFACE_LIBRARY" OR NOT headers STREQUAL "${ROOT}/include" OR links)\n'
+        '  message(FATAL_ERROR "unexpected MadObs link interface")\nendif()\n')
+    run("api-only-target","cmake","-S",src,"-B",work/"api target build",
+        "-DROOT="+str(prefix),"-DMadObs_DIR="+str(prefix/"lib/cmake/MadObs"),
+        "-DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF","-DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF")
+
+def verify_api_link_absence(syms,loads):
+    require(not re.search(r"(?m)\s_madobs_(?:create|start|stop|destroy|private_\w+|runtime_\w+|emit_generic_event|observer_for_runtime|check_private_batch)\s*$",syms),
+            "api-only-runtime-symbols")
+    require(not re.search(r"(?im)^\s*\S*(?:/libz\.|libmadobs|MadObsRuntime)",loads),"api-only-runtime-loads")
+
 def create_packages(args,work):
     packages=work/"separately relocated packages"
     packages.mkdir()
     with tempfile.TemporaryDirectory(prefix="producers-",dir=work) as tmp:
         source=Path(tmp)
-        stage_git("db",ROOT,args.db_ref,source/"db")
+        stage_git("db-api" if args.obs_api else "db",ROOT,args.db_ref,source/"db")
         stage_git("link",args.link_repo,args.link_ref,source/"link")
         db,link=(packages/f"{name}.xcframework" for name in ("MadDB","MadLink"))
         run("db-package","bash","scripts/build-ios.sh",cwd=source/"db")
@@ -137,10 +178,14 @@ def create_packages(args,work):
         obs=None
         if args.obs_repo:
             stage_git("obs",args.obs_repo,args.obs_ref,source/"obs")
-            obs=packages/"MadObsRuntime.xcframework"
-            built=source/"MadObsRuntime.xcframework"
-            make_obs(source/"obs",source,built)
-            shutil.move(built,obs)
+            if args.obs_api:
+                obs=packages/"MadObs API prefix"
+                make_obs_api(source/"obs",source,obs)
+            else:
+                obs=packages/"MadObsRuntime.xcframework"
+                built=source/"MadObsRuntime.xcframework"
+                make_obs(source/"obs",source,built)
+                shutil.move(built,obs)
         # Reuse the exact source-pinned, signature-insensitive Swift framework assertion.
         matcher=source/"db/scripts/ios_two_apps_linkage.py"
         spec=importlib.util.spec_from_file_location("maddb_package_linkage",matcher)
@@ -174,7 +219,7 @@ def test_result(summary,cases):
     check_nodes(cases["testNodes"])
     require(names==[EXACT_TEST],"result-name")
 
-def validate_app(build,db,helper,enabled):
+def validate_app(build,db,helper,enabled,*,api=False):
     parent=inside(build,"Build/Products/Debug-iphonesimulator")
     app=inside(parent,"MadDBSmoke.app")
     binary=inside(app,"MadDBSmoke")
@@ -186,10 +231,11 @@ def validate_app(build,db,helper,enabled):
     if enabled:
         require(all(defined(syms,s) for s in ("madobs_create","madobs_emit_generic_event",
                                              "madobs_check_private_batch")),"app-obs-symbols")
-    else:
+    elif not api:
         require(not re.search(r"(?m)\s_madobs_\w+\s*$",syms),"off-obs-symbols")
     embedded=app/"Frameworks"
     loads=run("app-loads","xcrun","otool","-L",binary,capture=True)
+    if api: verify_api_link_absence(syms,loads)
     require(not (embedded/"MadLink.framework").exists() and not (embedded/"MadObsRuntime.framework").exists()
             and not any(name in loads for name in ("MadLink.framework", "MadObsRuntime", "libmadobs", "libmadlink")),
             "static-not-dynamic")
@@ -211,6 +257,7 @@ def validate_app(build,db,helper,enabled):
     return (binary,*tests)
 
 def qualify(args):
+    require(not args.obs_api or args.obs_repo is not None,"api-only-explicit-pin")
     require(platform.system()=="Darwin" and platform.machine()=="arm64","stock-arm64-host")
     require(run("xcode-version","xcodebuild","-version",capture=True).splitlines()==
             ["Xcode 26.2","Build version 17C52"],"xcode-version")
@@ -223,13 +270,20 @@ def qualify(args):
         require(args.obs_repo or obs is None,"off-no-obs")
         before=digest(packages)
         link_archive=select_sim(link,"MadLink")
-        obs_paths=select_sim(obs,"libmadobs_runtime.a",True) if obs else None
+        api_headers=api_inventory(obs) if args.obs_api else None
+        if api_headers is not None:
+            prove_api_target(work,obs)
+            probe=work/"api collector probe"
+            run("api-collector-compile","xcrun","clang++","-std=c++17","-Wall","-Wextra","-Wpedantic","-Werror",
+                "-I",api_headers,HERE/"api_collector_test.cc","-o",probe)
+            run("api-collector-fixture",probe,cwd=work,timeout=30)
+        obs_paths=select_sim(obs,"libmadobs_runtime.a",True) if obs and not args.obs_api else None
         for archive in (link_archive,*((obs_paths[0],) if obs_paths else ())):
             require(run("archive-arch","xcrun","lipo","-archs",archive,capture=True).split()==["arm64"],"archive-arch")
             with archive.open("rb") as f:
                 require(f.read(8)==b"!<arch>\n","archive-type")
         folder=work/"independent app"
-        prepare(ROOT/"ios/Smoke",folder,db,link_archive,obs_paths)
+        prepare(ROOT/"ios/Smoke",folder,db,link_archive,obs_paths,api_headers=api_headers)
         build=work/"simulator build"
         result=work/"result.xcresult"
         udid=run("sim-create","xcrun","simctl","create","MadInstalledCohost",
@@ -244,7 +298,7 @@ def qualify(args):
                   "ARCHS=arm64","ONLY_ACTIVE_ARCH=YES","ENABLE_DEBUG_DYLIB=NO","-parallel-testing-enabled","NO",
                   "CODE_SIGNING_ALLOWED=YES","CODE_SIGN_IDENTITY=-","CODE_SIGNING_REQUIRED=NO")
             run("sim-build","xcodebuild","build-for-testing",*opts,cwd=folder)
-            artifacts=validate_app(build,db,helper,obs is not None)
+            artifacts=validate_app(build,db,helper,obs_paths is not None,api=args.obs_api)
             hashes={p:hashlib.sha256(p.read_bytes()).digest() for p in artifacts}
             run("sim-test","xcodebuild","test-without-building",*opts,"-resultBundlePath",result,cwd=folder)
             require(all(hashlib.sha256(p.read_bytes()).digest()==d for p,d in hashes.items()),"binary-mutation")
@@ -253,13 +307,14 @@ def qualify(args):
             require(digest(packages)==before,"package-mutation")
         finally:
             run("sim-delete","xcrun","simctl","delete",udid)
-    print("PASS: independent app-owned installed iOS cohost "+("ON" if args.obs_repo else "OFF"))
+    print("PASS: independent app-owned installed iOS cohost "+("API-only exact local 3+3" if args.obs_api else "ON" if args.obs_repo else "OFF"))
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument("--db-ref",default="HEAD^")
     parser.add_argument("--link-repo",type=Path,required=True)
     parser.add_argument("--link-ref",default=PINS["link"][0])
+    parser.add_argument("--obs-api",action="store_true")
     parser.add_argument("--obs-repo",type=Path)
     parser.add_argument("--obs-ref",default=PINS["obs"][0])
     try:

@@ -50,3 +50,26 @@ host/test executable paths, symbols, architecture, and result names are checked.
 Only the job-owned simulator runs. No device, installed-owner Mac changes,
 downloaded Apple SDK, license action, network traffic from the sample,
 credentials, payload export, artifact upload, parity or release claim.
+
+## Independent API-only iOS checkpoint
+
+The separate branch `checkpoint/maddb-ios-installed-cohost-api` explicitly
+selects `--obs-api` with the pinned public MadObs input. The old OFF and runtime
+ON workflow, runtime setup, and existing app/hosted XCTest ingress are unchanged.
+The API-only build installs upstream CMake with runtime, shared, JNI, tests and
+provider packaging disabled. It moves the real installed package, deletes the
+producers, verifies exactly two header and three CMake files, checks the actual
+relocated `MadObs::api` target (no runtime target or link interface), and passes
+only its installed headers to the existing App bridge. No runtime archive or
+zlib is linked; native symbol and direct load checks enforce that distinction.
+
+On the app's existing serial path the scoped bridge sanitizes real Link state
+events and app-reported successful Swift DB operations, delivers allowed records
+to a bounded app-owned collector and requires the exact typed ordered 3+3:
+connecting, connected, put, get, closed, reopen/get. Callback invocation alone
+is not success. A real idempotent remove of a missing key returns its original DB
+result and its synthetic observation is rejected by the policy before the
+local callback. A subsequent DB read confirms the key is still absent. No
+timestamp, customer data, payload, WAL, transport or exporter enters the API-only
+observer. The exact existing ARM64 Simulator XCTest remains the runtime gate.
+Portable fixtures are not Apple execution or Linux/mobile parity evidence.

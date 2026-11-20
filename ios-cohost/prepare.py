@@ -13,7 +13,9 @@ def quote(path):
     return '"' + path + '"'
 
 
-def prepare(base_project, dest, db, link_archive, obs):
+def prepare(base_project, dest, db, link_archive, obs, *, api_headers=None):
+    if obs is not None and api_headers is not None:
+        raise ValueError("ambiguous observation mode")
     project = dest / "MadDBSmoke.xcodeproj"
     project.mkdir(parents=True)
     shutil.copytree(base_project / "MadDBSmoke.xcodeproj/xcshareddata", project / "xcshareddata")
@@ -36,6 +38,10 @@ def prepare(base_project, dest, db, link_archive, obs):
                         GCC_PREPROCESSOR_DEFINITIONS=["$(inherited)","COHOST_OBS="+str(int(obs is not None))],
                         FRAMEWORK_SEARCH_PATHS=["$(inherited)",quote(link_archive.parent.parent)],
                         OTHER_LDFLAGS=["$(inherited)",quote(link_archive),"-lc++"])
+        if api_headers is not None:
+            settings["SWIFT_ACTIVE_COMPILATION_CONDITIONS"]="$(inherited) COHOST_OBS_API"
+            settings["GCC_PREPROCESSOR_DEFINITIONS"].append("COHOST_OBS_API=1")
+            settings["HEADER_SEARCH_PATHS"]=["$(inherited)",quote(api_headers)]
         if obs:
             archive, headers=obs
             settings["SWIFT_ACTIVE_COMPILATION_CONDITIONS"]="$(inherited) COHOST_OBS"
@@ -45,6 +51,8 @@ def prepare(base_project, dest, db, link_archive, obs):
         (dest/name).mkdir()
     for f in ("App.swift","Bridge.h","Bridge.mm"):
         shutil.copyfile(HERE/f,dest/"App"/f)
+    if api_headers is not None:
+        shutil.copyfile(HERE/"ApiCollector.hpp",dest/"App/ApiCollector.hpp")
     shutil.copyfile(HERE/"CohostTests.mm",dest/"Tests/CohostTests.mm")
     generator.unlink()
     (project/"project.pbxproj").write_text("// !$*UTF8*$!\n"+state["emit"](state["project"])+"\n")

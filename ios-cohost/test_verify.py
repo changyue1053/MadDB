@@ -26,6 +26,39 @@ class TestQualification(unittest.TestCase):
                 self.assertIn(ref(81),objects[ref(30)]["files"])
                 self.assertNotIn(ref(81),objects[ref(34)]["files"])
 
+    def test_api_mode_reuses_app_ingress_without_runtime_link_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp).resolve()
+            args=(verify.ROOT/"ios/Smoke",root/"app",root/"db",root/"Link/MadLink.framework/MadLink")
+            headers=root/"relocated API/include"
+            objects=verify.prepare(*args,None,api_headers=headers)
+            ref=lambda n:f"{n:024X}"
+            app=objects[ref(62)]["buildSettings"]
+            self.assertIn("COHOST_OBS_API=1",app["GCC_PREPROCESSOR_DEFINITIONS"])
+            self.assertIn("COHOST_OBS=0",app["GCC_PREPROCESSOR_DEFINITIONS"])
+            self.assertIn('"'+str(headers)+'"',app["HEADER_SEARCH_PATHS"])
+            self.assertNotIn("-lz",app["OTHER_LDFLAGS"])
+            self.assertEqual(objects[ref(35)]["files"],[])
+            self.assertTrue((root/"app/App/ApiCollector.hpp").is_file())
+            with self.assertRaises(ValueError):
+                verify.prepare(*args,(root/"runtime.a",headers),api_headers=headers)
+
+    def test_api_install_inventory_and_link_absence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix=Path(tmp).resolve()
+            for name in verify.API_ONLY_FILES:
+                p=prefix/name;p.parent.mkdir(parents=True,exist_ok=True);p.touch()
+            self.assertEqual(verify.api_inventory(prefix),prefix/"include")
+            for forbidden in ("include/madobs/runtime.h","lib/libmadobs_runtime.a",
+                              "lib/cmake/MadObs/MadObsRuntimeTargets.cmake"):
+                extra=prefix/forbidden;extra.touch()
+                with self.assertRaises(verify.Failure): verify.api_inventory(prefix)
+                extra.unlink()
+        verify.verify_api_link_absence("0001 T _ml_create_tracked_v1\n","/usr/lib/libSystem.B.dylib")
+        for symbols,loads in (("0001 T _madobs_create\n",""),("","\t/usr/lib/libz.1.dylib"),
+                              ("","\t@rpath/MadObsRuntime.framework/MadObsRuntime")):
+            with self.assertRaises(verify.Failure): verify.verify_api_link_absence(symbols,loads)
+
     def test_simulator_slice_and_private_headers_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             xc=Path(tmp).resolve()

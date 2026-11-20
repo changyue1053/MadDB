@@ -4,6 +4,9 @@
 #if COHOST_OBS
 #include <atomic>
 #include <madobs/runtime.h>
+#elif COHOST_OBS_API
+#include "ApiCollector.hpp"
+static_assert(ML_CONNECTING==1 && ML_CONNECTED==2 && ML_CLOSED==4);
 #endif
 
 namespace {
@@ -19,6 +22,8 @@ struct Session {
     std::atomic<unsigned> batches{0}, unsafe{0};
     madobs_event_rule_v1 rules[2]{};
     madobs_privacy_policy_v1 policy{sizeof(policy),MADOBS_ABI_VERSION,2,rules};
+#elif COHOST_OBS_API
+    cohost_api::Collector collector;
 #endif
 };
 void begin(void *ctx,const char*,uint64_t generation) {
@@ -80,6 +85,8 @@ bool states(Session &s,const uint32_t *expected,unsigned count) {
         if (got>=count || event.state!=expected[got++]) return false;
 #if COHOST_OBS
         if (!observe(s,link_sdk,1,event.state)) return false;
+#elif COHOST_OBS_API
+        if (!s.collector.report(cohost_api::link_sdk,1,event.state)) return false;
 #endif
     }
     return false;
@@ -97,6 +104,8 @@ bool dispose(Session *s,bool verify) {
             s->batches && s->batches<=16 && !s->unsafe);
         if (madobs_destroy(s->observer)!=MADOBS_OK) return false;
     }
+#elif COHOST_OBS_API
+    verify=!verify || s->collector.exact();
 #else
     (void)verify;verify=true;
 #endif
@@ -143,6 +152,10 @@ extern "C" int32_t mco_db_report(void *context,uint32_t operation) {
     if (operation<1 || operation>4) return 0;
     auto &s=*static_cast<Session*>(context);
     return observe(s,db_sdk,operation==4?2:1,operation);
+#elif COHOST_OBS_API
+    if (operation<1 || operation>4) return 0;
+    auto &s=*static_cast<Session*>(context);
+    return s.collector.report(cohost_api::db_sdk,operation==4?2:1,operation);
 #else
     (void)context;(void)operation;return 0;
 #endif
