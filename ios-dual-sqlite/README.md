@@ -43,3 +43,17 @@ The command creates and deletes a fresh Simulator only on the approved runner.
 Local public-equivalent reconstructions may be selected with explicit
 `--db-ref` and `--media-ref`, but both full source trees are always checked.
 No actual native run or workflow was included with this source-only checkpoint.
+
+For separate native **build-only evidence**, add `--build-only` to the
+invocation above. The same exact graph builds against a fresh owned Simulator
+UUID without booting it. The driver validates the signed products and installed
+package boundaries, then privately inventories one bounded regular generated
+receipt under the actual products directory. Only fixed shape/path-match and
+presence labels are reported. Unknown host/bundle forms or reported overrides
+aren't launch-approved; the inventory never changes or launches a receipt.
+An unreadable, missing, duplicate, aliased, or structurally ambiguous receipt
+fails the build-only evidence lane. XML must contain one plist root with one
+dictionary, using standard plist elements and alternating dictionary keys
+and values. The standard Apple DOCTYPE is accepted only as a literal marker;
+no DTD or external entity is resolved. These labels summarize selected
+metadata, not a complete schema audit, trust decision, or execution policy. The fresh Simulator is deleted on exit.

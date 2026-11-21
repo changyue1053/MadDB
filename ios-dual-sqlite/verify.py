@@ -11,6 +11,7 @@ import subprocess
 import tarfile
 import tempfile
 import linkage
+import receipt_inventory
 from prepare import prepare
 
 HERE = Path(__file__).resolve().parent
@@ -204,6 +205,31 @@ def validate(build,db):
     return (app,*[p.parent for p in tests])
 
 
+def build_options(uuid,build):
+    return ("-project","MadDBSmoke.xcodeproj","-scheme","MadDBSmoke","-configuration","Debug",
+          "-destination","platform=iOS Simulator,id="+uuid,"-derivedDataPath",build,
+          "ARCHS=arm64","ONLY_ACTIVE_ARCH=YES","ENABLE_DEBUG_DYLIB=NO","-parallel-testing-enabled","NO",
+          "CODE_SIGNING_ALLOWED=YES","CODE_SIGN_IDENTITY=-","CODE_SIGNING_REQUIRED=NO")
+
+
+def build_only(uuid,build,app,db,packages,before):
+    run("sim-build","xcodebuild","build-for-testing",*build_options(uuid,build),cwd=app,timeout=420)
+    binaries=validate(build,db)
+    products=inside(build,"Build/Products")
+    bundles=tuple(str(bundle.relative_to(products)) for bundle in binaries[1:])
+    try:
+        receipt=receipt_inventory.inventory(products,bundles)
+        identities=[digest(path) for path in binaries]
+        require(digest(packages)==before and
+                receipt_inventory.inventory(products,bundles)==receipt and
+                [digest(path) for path in binaries]==identities,"artifact-mutation")
+    except receipt_inventory.Rejected as error:
+        # Only fixed source-owned errors; no plist content or path.
+        raise Failure(str(error)) from None
+    for label in receipt[1]:
+        print("RESULT: dual-sqlite-receipt-"+label,flush=True)
+
+
 def qualify(args):
     require(platform.system()=="Darwin" and platform.machine()=="arm64","stock-arm64-host")
     require(run("xcode-version","xcodebuild","-version",capture=True).splitlines()==
@@ -223,13 +249,17 @@ def qualify(args):
                  "com.apple.CoreSimulator.SimDeviceType.iPhone-16",
                  "com.apple.CoreSimulator.SimRuntime.iOS-26-2",capture=True,timeout=60).strip()
         require(re.fullmatch(r"[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}",uuid),"sim-uuid")
+        if args.build_only:
+            try:
+                build_only(uuid,build,app,db,packages,before)
+            finally:
+                run("sim-delete","xcrun","simctl","delete",uuid,timeout=90)
+            print("PASS: installed iOS dual SQLite build-only (no Simulator execution)")
+            return
         try:
             run("sim-boot","xcrun","simctl","boot",uuid,timeout=90)
             run("sim-ready","xcrun","simctl","bootstatus",uuid,"-b",timeout=180)
-            opts=("-project","MadDBSmoke.xcodeproj","-scheme","MadDBSmoke","-configuration","Debug",
-                  "-destination","platform=iOS Simulator,id="+uuid,"-derivedDataPath",build,
-                  "ARCHS=arm64","ONLY_ACTIVE_ARCH=YES","ENABLE_DEBUG_DYLIB=NO","-parallel-testing-enabled","NO",
-                  "CODE_SIGNING_ALLOWED=YES","CODE_SIGN_IDENTITY=-","CODE_SIGNING_REQUIRED=NO")
+            opts=build_options(uuid,build)
             run("sim-build","xcodebuild","build-for-testing",*opts,cwd=app,timeout=420)
             products=validate(build,db)
             hashes=[digest(p) for p in products]
@@ -245,6 +275,7 @@ def qualify(args):
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser()
+    parser.add_argument("--build-only",action="store_true")
     parser.add_argument("--db-ref",default=PINS["db"][0])
     parser.add_argument("--media-repo",type=Path,required=True)
     parser.add_argument("--media-ref",default=PINS["media"][0])
