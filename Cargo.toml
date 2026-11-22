@@ -1,0 +1,20 @@
+[package]
+name = "maddb"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "MIT"
+description = "Standalone synchronous SQLite key-value SDK with optional local metrics"
+readme = "README.md"
+publish = false
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+madobs = []
+c-api = []
+
+[dependencies]
+rusqlite = { version = "=0.43.0", default-features = false, features = ["bundled"] }
