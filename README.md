@@ -46,6 +46,22 @@ The installed SDK scripts target Linux x86_64 and use Rust 1.100.0. See
 [validation](VALIDATION.md) for the evidence and remaining checks, and
 [dependency provenance](DEPENDENCIES.md) for exact versions and checksums.
 
+## Optional observer adapter
+
+The separate [header-only adapter](adapters/obs/README.md) reports fixed C ABI
+operation/status events to a host-supplied MadObs observer after DB calls. It is
+not part of the default build or installer and includes no MadObs runtime,
+third-party header, logs, or export.
+
+## Standalone iOS Swift package
+
+The [iOS source recipe](ios/README.md) builds the Swift XCFramework for ARM64
+iOS and ARM64 Simulator with prepared Apple tools. The independent app and
+hosted XCTest fixture consume the built package, not source. The earlier
+checkpoint passed package inspection, unsigned device compilation, and ARM64
+Simulator tests. This integration does not rerun Apple tests, ship binaries,
+or claim physical-device execution.
+
 ## Boundaries
 
 Storage and journals are plaintext. A namespace is not an authorization
@@ -53,9 +69,9 @@ boundary. Use trusted application-owned files inside the application's OS
 sandbox; callers own permissions, backup and lifecycle. Calls can block,
 including SQLite's bounded busy wait, so avoid blocking a UI thread.
 The source does not implement encryption, migration beyond schema 1, WAL,
-replication, or a network exporter. Mobile bindings and optional cohost
-experiments are outside this integration. Cargo publication and binary release
-are not enabled by this source snapshot.
+replication, or a network exporter. Android and HarmonyOS bindings and optional
+cohost experiments are outside this integration. Cargo publication and binary
+release are not enabled by this source snapshot.
 
 First-party MadDB code is [MIT](LICENSE). Third-party components retain their
 own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).

@@ -1,8 +1,9 @@
 # Validation summary
 
 This source integration selects the reviewed standalone Rust library,
-experimental C ABI, and installed Linux acceptance fixtures. It adds no
-workflow, mobile binding, optional cross-repository cohost, binary, or release.
+experimental C ABI, installed Linux acceptance fixtures, optional observer
+adapter, and standalone iOS Swift packaging and consumer sources. It adds no
+workflow, cross-repository cohost, Android/HarmonyOS binding, binary, or release.
 
 ## Historical exact-source evidence
 
@@ -46,3 +47,28 @@ consistency. Recording these results changed only this validation document.
 No minimum Rust version qualification, current security advisory audit,
 physical-device runtime, crash/power-loss test, long-running contention test, or
 production readiness is claimed. The package is unencrypted.
+
+
+## Optional observer adapter
+
+The opt-in C11/C++17 contract fixtures and the separate real in-memory
+SQLite-to-local-observer test passed on the current Linux x86_64 source with
+Rust/Cargo 1.100.0 and the exact independently staged public observer header.
+The actual Rust library was built locked and offline. This adds no fresh
+cross-repository cohost, mobile, runtime/WAL, or export claim; the standalone
+library, C ABI and Linux install paths are unchanged.
+
+
+## Standalone iOS source provenance
+
+The producer, Swift API, independent binary consumer and verifier scripts match
+[public checkpoint 4274af59](https://github.com/changyue1053/MadDB/commit/4274af59b0f577ddd14de0cb710f73e7f10baa65).
+Its [hosted run](https://github.com/changyue1053/MadDB/actions/runs/44638052469)
+built and inspected both slices, compiled the unsigned device consumer, and
+passed all 10 named tests on an ARM64 iOS 26.2 Simulator. The Rust core, C ABI,
+Cargo files, and notices are unchanged from that checkpoint. This integration
+passed 7 portable package-inspector tests, 5 result-parser tests, shell syntax,
+and scheme XML checks; no Apple build or run was performed on this integration
+commit. There is no claimed physical-device, minimum-iOS runtime, or release
+validation. The independent store fixture runs two stores inside one hosted
+app process; it is not a two-app or concurrent-process claim.
